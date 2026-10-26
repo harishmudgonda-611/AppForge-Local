@@ -87,7 +87,7 @@ jobs:
           assert d.get('ok') is True, f'health endpoint not OK: {d}'
           PY
           curl --fail --silent http://127.0.0.1:8787/ | grep -qi 'AppForge'
-          curl --fail --silent http://127.0.0.1:8787/static/app.js | grep -q 'run-analysis'
+          curl --fail --silent http://127.0.0.1:8787/app.js | grep -q 'run-analysis'
           curl --fail --silent http://127.0.0.1:8787/api/projects | python -c "import json,sys; d=json.load(sys.stdin); assert isinstance(d.get('projects'), list), d"
           curl --fail --silent -X POST http://127.0.0.1:8787/api/feedback -H 'Content-Type: application/json' -d '{"kind":"ci-smoke","feedback":"CI end-to-end smoke test"}' | python -c "import json,sys; d=json.load(sys.stdin); assert d.get('ok') is True, d"
           echo "HTTP smoke tests passed"
