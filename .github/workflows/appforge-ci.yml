@@ -1,0 +1,108 @@
+name: AppForge Local CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  source-checks:
+    name: Source checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Extract AppForge source archive if source is not yet unpacked
+        shell: bash
+        run: |
+          if [ ! -f appforge_local/server.py ]; then
+            found=""
+            for archive in *.zip; do
+              [ -f "$archive" ] || continue
+              if unzip -l "$archive" | grep -qE 'appforge_local/server\.py|server\.py'; then
+                found="$archive"
+                break
+              fi
+            done
+            if [ -n "$found" ]; then
+              echo "Extracting $found"
+              unzip -oq "$found" -d .
+            else
+              echo "::warning::No AppForge source tree found yet. Upload/extract the v3 source archive to run source tests."
+              exit 0
+            fi
+          fi
+
+      - name: Run unit tests
+        shell: bash
+        run: |
+          if [ -d appforge_local/tests ]; then
+            cd appforge_local
+            python -m unittest discover -s tests -v
+          else
+            echo "::warning::Source tests are not present; skipping."
+          fi
+
+      - name: Compile Python files
+        shell: bash
+        run: |
+          if [ -d appforge_local ]; then
+            python -m compileall -q appforge_local
+          fi
+
+  android-apk:
+    name: Android debug APK (when a native project exists)
+    runs-on: ubuntu-latest
+    needs: source-checks
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        if: ${{ hashFiles('appforge_local/android/gradlew', 'android/gradlew', 'gradlew') != '' }}
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Set up Android SDK
+        if: ${{ hashFiles('appforge_local/android/gradlew', 'android/gradlew', 'gradlew') != '' }}
+        uses: android-actions/setup-android@v3
+
+      - name: Build debug APK
+        shell: bash
+        run: |
+          if [ -x appforge_local/android/gradlew ]; then
+            cd appforge_local/android
+            ./gradlew assembleDebug
+          elif [ -x android/gradlew ]; then
+            cd android
+            ./gradlew assembleDebug
+          elif [ -x gradlew ]; then
+            ./gradlew assembleDebug
+          else
+            echo "::notice::No native Android Gradle project is committed yet. APK build skipped; AppForge is currently a Python-backed PWA."
+            exit 0
+          fi
+
+      - name: Upload APK artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: appforge-local-debug-apk
+          path: |
+            appforge_local/android/app/build/outputs/apk/debug/*.apk
+            android/app/build/outputs/apk/debug/*.apk
+            app/build/outputs/apk/debug/*.apk
+          if-no-files-found: ignore
