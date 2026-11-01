@@ -84,9 +84,15 @@ class Handler(SimpleHTTPRequestHandler):
     def safe_path(self, project, filename=''):
         if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_-]{0,63}',project or ''): return None
         if filename and (Path(filename).name!=filename or filename in ('.','..')): return None
-        base=(WORKSPACE/project).resolve()
-        if base.parent!=WORKSPACE.resolve(): return None
-        return (base/filename).resolve() if filename else base
+        workspace = WORKSPACE.resolve()
+        base = (workspace / project).resolve()
+        if base.parent != workspace: return None
+        if not filename: return base
+        target = (base / filename).resolve()
+        # A filename can be a symlink; ensure its resolved target remains inside
+        # the selected project before serving or modifying it.
+        if target.parent != base and base not in target.parents: return None
+        return target
     def do_POST(self):
         try: data=self.body()
         except Exception as e: return self.send_json({'error':str(e)},400)
