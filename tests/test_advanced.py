@@ -77,8 +77,6 @@ class AppForgeAdvancedTests(unittest.TestCase):
     def test_repair_requires_approval(self):
         with self.assertRaises(ValueError): advanced.repair_project('NoSuchProject_abcdef',False)
 
-if __name__=='__main__': unittest.main(verbosity=2)
-
 
     def test_local_model_endpoint_policy(self):
         self.assertTrue(advanced.local_endpoint_allowed("http://127.0.0.1:8080/v1"))
@@ -133,3 +131,5 @@ if __name__=='__main__': unittest.main(verbosity=2)
             finally:
                 advanced.ROOT, advanced.WORKSPACE = old_root, old_workspace
 
+if __name__ == '__main__':
+    unittest.main(verbosity=2)
