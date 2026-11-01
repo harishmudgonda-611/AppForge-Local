@@ -361,11 +361,11 @@ def repair_project(project_name, approved=False):
     first=test_project(project_name)
     if first['ok']: return {'ok':True,'message':'No repair needed; current checks passed.','before':first,'after':first}
     p=(WORKSPACE/project_name).resolve()
-    checkpoint=git_action(project_name,'checkpoint')
-    if not checkpoint.get('ok'): return {'ok':False,'error':'Could not create Git checkpoint; no files changed.','checkpoint':checkpoint,'before':first}
     cfg=json.loads((ROOT/'config.local.json').read_text())
     if not local_endpoint_allowed(cfg.get('llm_base_url', '')):
         return {'ok':False,'error':'Local-first policy: repair requires a localhost or private-LAN model endpoint.','before':first}
+    checkpoint=git_action(project_name,'checkpoint')
+    if not checkpoint.get('ok'): return {'ok':False,'error':'Could not create Git checkpoint; no files changed.','checkpoint':checkpoint,'before':first}
     candidates=[]
     for rel in first.get('failures',[]):
         m=re.match(r'(?:Invalid JSON |JS syntax failed )([^:]+):',rel)
