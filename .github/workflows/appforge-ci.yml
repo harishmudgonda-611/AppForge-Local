@@ -169,3 +169,18 @@ jobs:
           for archive in AppForge-Local-Replica-Integrated-v3.zip "AppForge-Local-Advanced.zip"; do
             if [ -f "$archive" ]; then unzip -t "$archive"; fi
           done
+      - name: Package current validated source
+        shell: bash
+        run: |
+          set -euo pipefail
+          package="AppForge-Local-source"
+          mkdir -p "$package"
+          cp -a server.py advanced.py static tests README.md LICENSE SECURITY.md CONTRIBUTING.md config.example.json start.sh start.bat "$package/"
+          zip -qr AppForge-Local-source.zip "$package"
+          unzip -t AppForge-Local-source.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: AppForge-Local-source
+          path: AppForge-Local-source.zip
+          if-no-files-found: error
+          retention-days: 14
