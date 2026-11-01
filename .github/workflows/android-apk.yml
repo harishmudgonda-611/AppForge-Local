@@ -56,9 +56,11 @@ jobs:
         run: |
           set -euo pipefail
           test -s package.json
+          test -s package-lock.json
           test -s capacitor.config.json
           test -s index.html
-          if [ -f package-lock.json ]; then npm ci; else npm install; fi
+          node -e "const p=require('./package.json'); if (!p.scripts?.build) process.exit(1); const c=require('./capacitor.config.json'); if (!c.appId || c.webDir !== 'dist') process.exit(1)"
+          npm ci
           npm test --if-present
           npm run build
           test -s dist/index.html
@@ -84,12 +86,23 @@ jobs:
           set -euo pipefail
           APK="android/app/build/outputs/apk/debug/app-debug.apk"
           test -s "$APK"
+          unzip -t "$APK"
+          BADGING="$( "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging "$APK" )"
+          printf '%s\n' "$BADGING" | grep -F "package: name='" >/dev/null
+          EXPECTED_ID="$(node -p "require('./capacitor.config.json').appId")"
+          ACTUAL_ID="$(printf '%s\n' "$BADGING" | sed -n "s/^package: name='\\([^']*\\)'.*/\\1/p")"
+          if [ "$ACTUAL_ID" != "$EXPECTED_ID" ]; then
+            echo "APK package ID mismatch: expected $EXPECTED_ID, got $ACTUAL_ID"
+            exit 1
+          fi
           echo "path=$APK" >> "$GITHUB_OUTPUT"
-          sha256sum "$APK"
+          sha256sum "$APK" | tee APK-SHA256.txt
 
       - uses: actions/upload-artifact@v7
         with:
           name: appforge-${{ steps.validate.outputs.app_slug }}-debug-apk
-          path: apps/${{ steps.validate.outputs.app_slug }}/${{ steps.apk.outputs.path }}
+          path: |
+            apps/${{ steps.validate.outputs.app_slug }}/${{ steps.apk.outputs.path }}
+            apps/${{ steps.validate.outputs.app_slug }}/APK-SHA256.txt
           if-no-files-found: error
           retention-days: 7
