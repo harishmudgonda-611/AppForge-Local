@@ -77,3 +77,24 @@ class AppForgeAdvancedTests(unittest.TestCase):
         with self.assertRaises(ValueError): advanced.repair_project('NoSuchProject_abcdef',False)
 
 if __name__=='__main__': unittest.main(verbosity=2)
+
+
+    def test_local_model_endpoint_policy(self):
+        self.assertTrue(advanced.local_endpoint_allowed("http://127.0.0.1:8080/v1"))
+        self.assertTrue(advanced.local_endpoint_allowed("http://192.168.1.20:11434/v1"))
+        self.assertFalse(advanced.local_endpoint_allowed("https://example.com/v1"))
+        self.assertFalse(advanced.local_endpoint_allowed("http://8.8.8.8/v1"))
+        self.assertFalse(advanced.local_endpoint_allowed("file:///etc/passwd"))
+
+    def test_repair_rejects_remote_endpoint_before_model_call(self):
+        old_workspace = advanced.WORKSPACE
+        with tempfile.TemporaryDirectory() as tmp:
+            advanced.WORKSPACE = Path(tmp)
+            project = Path(tmp) / "RemoteRepairGuard"
+            project.mkdir()
+            (project / "index.html").write_text("<html></html>")
+            # No node is required: the valid minimal project should pass current checks.
+            result = advanced.repair_project("RemoteRepairGuard", approved=True)
+            self.assertTrue(result["ok"])
+            advanced.WORKSPACE = old_workspace
+
