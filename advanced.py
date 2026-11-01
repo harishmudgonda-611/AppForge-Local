@@ -218,6 +218,15 @@ def db():
     c.execute('''CREATE TABLE IF NOT EXISTS launch_config (project TEXT PRIMARY KEY, config TEXT, updated_at INTEGER)''')
     c.commit(); return c
 
+def region_code(value, default='in'):
+    """Validate the two-letter storefront region used in public Apple URLs."""
+    if value is None or value == '':
+        value = default
+    if not isinstance(value, str) or not re.fullmatch(r'[A-Za-z]{2}', value):
+        raise ValueError('Region must be a two-letter country code.')
+    return value.lower()
+
+
 def request_json(url, timeout=12, attempts=3):
     last=None
     for i in range(attempts):
@@ -234,6 +243,10 @@ def request_json(url, timeout=12, attempts=3):
     raise RuntimeError(f'Failed after {attempts} attempts: {last}')
 
 def research_search(term, country='in', limit=25):
+    country=region_code(country)
+    if not isinstance(term, str) or not term.strip():
+        raise ValueError('Search term is required.')
+    term=term.strip()[:200]
     q=urlencode({'term':term,'country':country,'entity':'software','limit':max(1,min(int(limit),50))})
     payload=request_json('https://itunes.apple.com/search?'+q)
     rows=[]; now=int(time.time()); c=db()
@@ -246,6 +259,7 @@ def research_search(term, country='in', limit=25):
     return {'query':term,'region':country,'source':'Apple iTunes Search API','collected_at':now,'apps':rows,'note':'Search results are relevance-ranked, not proof of downloads or virality.'}
 
 def snapshot(region='in'):
+    region=region_code(region)
     url=f'https://rss.applemarketingtools.com/api/v2/{region}/apps/top-free/50/apps.json'
     payload=request_json(url)
     now=int(time.time()); rows=[]; c=db()
@@ -261,6 +275,9 @@ def history(app_id, limit=30):
     return {'app_id':app_id,'history':rows,'note':'History accumulates only after AppForge collects repeated snapshots/searches.'}
 
 def reviews(app_id, country='us', limit=25):
+    country=region_code(country, 'us')
+    if not re.fullmatch(r'[0-9]{1,20}', str(app_id or '')):
+        raise ValueError('App Store app ID must be a positive numeric identifier.')
     # Apple's public customer review RSS feed is best-effort and can be unavailable by app/region.
     url=f'https://itunes.apple.com/{country}/rss/customerreviews/id={int(app_id)}/sortBy=mostRecent/json'
     payload=request_json(url, attempts=2); feed=payload.get('feed',{}); entries=feed.get('entry',[])
