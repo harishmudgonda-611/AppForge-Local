@@ -86,6 +86,13 @@ def replica_run(data, llm_fn):
     # Never follow project-controlled symlinks while reading or writing workflow artifacts.
     if replica_dir.is_symlink() or (replica_dir.exists() and not replica_dir.is_dir()):
         return {"status": 409, "body": {"error": "The replica artifact path must be a real directory, not a symlink or file."}}
+    state_path = replica_dir / "workflow-state.json"
+    if state_path.is_symlink() or (state_path.exists() and not state_path.is_file()):
+        return {"status": 409, "body": {"error": "Refusing to overwrite an unsafe workflow state path.", "written": []}}
+    if stage_id == "replica-build":
+        summary_path = replica_dir / "04-build-summary.md"
+        if summary_path.is_symlink() or (summary_path.exists() and not summary_path.is_file()):
+            return {"status": 409, "body": {"error": "Refusing to overwrite an unsafe workflow summary path.", "written": []}}
     prior = []
     if replica_dir.is_dir():
         for f in sorted(replica_dir.glob("*.md"))[-8:]:
@@ -172,13 +179,7 @@ def replica_run(data, llm_fn):
     if replica_dir.is_symlink() or replica_dir.resolve().parent != project:
         return {"status": 409, "body": {"error": "Refusing to write workflow artifacts outside the project directory."}}
     written, checkpoint = [], None
-    state_path = replica_dir / "workflow-state.json"
-    if state_path.is_symlink() or (state_path.exists() and not state_path.is_file()):
-        return {"status": 409, "body": {"error": "Refusing to overwrite an unsafe workflow state path.", "written": []}}
     if stage_id == "replica-build":
-        summary_path = replica_dir / "04-build-summary.md"
-        if summary_path.is_symlink() or (summary_path.exists() and not summary_path.is_file()):
-            return {"status": 409, "body": {"error": "Refusing to overwrite an unsafe workflow summary path.", "written": []}}
         existing = [f for f in build_obj["files"] if (project / f).is_file()]
         if existing:
             checkpoint = git_action(name, "checkpoint")
