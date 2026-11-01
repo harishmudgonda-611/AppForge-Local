@@ -212,7 +212,7 @@ def replica_run(data, llm_fn):
 def db():
     for candidate in (DB, Path(str(DB) + '-wal'), Path(str(DB) + '-shm')):
         if candidate.is_symlink() or (candidate.exists() and not candidate.is_file()):
-            raise RuntimeError('AppForge SQLite database and journal paths must be regular files, not symlinks or directories.')
+            raise RuntimeError('AppForge SQLite database must be a regular file; database and journal paths cannot be symlinks or directories.')
     c=sqlite3.connect(DB, timeout=30)
     c.execute('PRAGMA busy_timeout=30000')
     c.row_factory=sqlite3.Row
