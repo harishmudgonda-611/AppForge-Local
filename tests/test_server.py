@@ -57,6 +57,25 @@ class AppForgeHTTPTests(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertEqual(len(data["stages"]), 11)
 
+    def test_safe_path_rejects_symlink_escape(self):
+        import tempfile
+        from pathlib import Path
+        original = server.WORKSPACE
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            workspace = root / "workspace"
+            project = workspace / "Demo"
+            outside = root / "private.txt"
+            project.mkdir(parents=True)
+            outside.write_text("private")
+            (project / "leak.txt").symlink_to(outside)
+            server.WORKSPACE = workspace
+            try:
+                self.assertIsNone(server.Handler.safe_path(None, "Demo", "leak.txt"))
+                self.assertEqual(server.Handler.safe_path(None, "Demo", "index.html"), project / "index.html")
+            finally:
+                server.WORKSPACE = original
+
     def test_settings_reject_remote_model_endpoint(self):
         status, data = self.post_json(
             "/api/config",
