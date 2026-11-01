@@ -47,6 +47,9 @@ jobs:
 
       - uses: android-actions/setup-android@v4
 
+      - name: Install Capacitor 8 Android SDK packages
+        run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
+
       - name: Install app dependencies and validate
         working-directory: apps/${{ steps.validate.outputs.app_slug }}
         shell: bash
