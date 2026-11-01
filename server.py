@@ -518,7 +518,10 @@ class Handler(SimpleHTTPRequestHandler):
         if not local_endpoint_allowed(base): return self.send_json({'error':'For local-first safety, configure a localhost or private-LAN model endpoint only.'},400)
         url=base+'/chat/completions'
         payload={'model':cfg['llm_model'],'messages':[{'role':'system','content':system},{'role':'user','content':user}], 'temperature':0.3}
-        req=urllib.request.Request(url,data=json.dumps(payload).encode(),headers={'Content-Type':'application/json','Authorization':'Bearer '+cfg.get('llm_api_key','ollama')},method='POST')
+        headers={'Content-Type':'application/json'}
+        api_key=str(cfg.get('llm_api_key','')).strip()
+        if api_key: headers['Authorization']='Bearer '+api_key
+        req=urllib.request.Request(url,data=json.dumps(payload).encode(),headers=headers,method='POST')
         try:
             with urllib.request.urlopen(req,timeout=max(5,min(int(cfg.get('timeout_seconds',120)),600))) as r: resp=read_limited_json(r)
             txt=resp['choices'][0]['message']['content']
