@@ -369,12 +369,20 @@ def test_project(project_name, repair=False, call_llm=None, run_npm_tests=False)
         if f.is_symlink() or any(x in f.parts for x in ('node_modules','.git','android')): continue
         try: json.loads(f.read_text())
         except Exception as e: failures.append(f'Invalid JSON {f.relative_to(p)}: {e}')
-    if run_npm_tests and (p/'package.json').exists() and shutil.which('npm'):
-        try:
-            proc=subprocess.run(['npm','test'],cwd=p,capture_output=True,text=True,timeout=120)
-            logs.append({'stage':'npm-test','returncode':proc.returncode,'stdout':proc.stdout[-5000:],'stderr':proc.stderr[-5000:]})
-            if proc.returncode: failures.append('npm test failed')
-        except Exception as e: failures.append('npm test could not run: '+str(e))
+    if run_npm_tests:
+        if not (p/'package.json').is_file():
+            failures.append('npm test was requested but package.json is missing')
+            logs.append({'stage':'npm-test','skipped':True,'reason':'package.json is missing'})
+        elif not shutil.which('npm'):
+            failures.append('npm test was requested but npm is not installed')
+            logs.append({'stage':'npm-test','skipped':True,'reason':'npm executable is unavailable'})
+        else:
+            try:
+                proc=subprocess.run(['npm','test'],cwd=p,capture_output=True,text=True,timeout=120,
+                                    stdin=subprocess.DEVNULL)
+                logs.append({'stage':'npm-test','returncode':proc.returncode,'stdout':proc.stdout[-5000:],'stderr':proc.stderr[-5000:]})
+                if proc.returncode: failures.append('npm test failed')
+            except Exception as e: failures.append('npm test could not run: '+str(e))
     # Syntax-check JavaScript using Node when available.
     if shutil.which('node'):
         for f in list(p.rglob('*.js'))[:100]:
