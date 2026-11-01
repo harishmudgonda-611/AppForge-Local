@@ -66,8 +66,16 @@ def validate_generated_files(files):
         if total > 2_000_000:
             return None, 'Generated project exceeds the 2 MB total source limit.'
         normalized[rel] = content
-    if 'index.html' not in normalized or not normalized['index.html'].strip():
-        return None, 'Generated project must include a non-empty index.html entry point.'
+    required = ('index.html', 'app.js', 'styles.css', 'manifest.webmanifest', 'sw.js')
+    missing = [name for name in required if name not in normalized or not normalized[name].strip()]
+    if missing:
+        return None, 'Generated PWA is incomplete; required non-empty files: ' + ', '.join(missing)
+    try:
+        manifest = json.loads(normalized['manifest.webmanifest'])
+        if not isinstance(manifest, dict) or not isinstance(manifest.get('name'), str) or not manifest['name'].strip():
+            return None, 'manifest.webmanifest must be a JSON object with a non-empty name.'
+    except Exception as exc:
+        return None, 'manifest.webmanifest is invalid JSON: ' + str(exc)
     return normalized, None
 
 
