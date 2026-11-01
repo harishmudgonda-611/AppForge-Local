@@ -138,7 +138,40 @@ class Handler(SimpleHTTPRequestHandler):
         # the selected project before serving or modifying it.
         if target.parent != base and base not in target.parents: return None
         return target
+    def same_origin_request_allowed(self):
+        """Reject browser cross-origin writes and non-loopback Host headers.
+
+        Origin-less requests remain available to local CLI clients. This is a
+        defence-in-depth check, not authentication; keep the server on loopback.
+        """
+        host_header=self.headers.get('Host','')
+        try:
+            host=urlparse('//'+host_header)
+            hostname=(host.hostname or '').lower().rstrip('.')
+            if hostname!='localhost' and not ipaddress.ip_address(hostname).is_loopback:
+                return False
+            origin=self.headers.get('Origin')
+            if origin:
+                parsed=urlparse(origin)
+                if parsed.scheme!='http' or not parsed.hostname:
+                    return False
+                origin_host=parsed.hostname.lower().rstrip('.')
+                if origin_host!=hostname:
+                    return False
+                host_port=host.port or 80
+                origin_port=parsed.port or (80 if parsed.scheme=='http' else 443)
+                if origin_port!=host_port:
+                    return False
+            fetch_site=self.headers.get('Sec-Fetch-Site','').lower()
+            if fetch_site and fetch_site not in ('same-origin','none'):
+                return False
+            return True
+        except (ValueError, TypeError):
+            return False
+
     def do_POST(self):
+        if not self.same_origin_request_allowed():
+            return self.send_json({'error':'Request rejected: AppForge accepts write requests only from its local same-origin interface.'},403)
         try: data=self.body()
         except Exception as e: return self.send_json({'error':str(e)},400)
         try:
