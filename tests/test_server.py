@@ -9,6 +9,7 @@ import urllib.request
 from http.server import ThreadingHTTPServer
 
 import server
+import shutil
 
 
 class AppForgeHTTPTests(unittest.TestCase):
@@ -315,6 +316,19 @@ class AppForgeHTTPTests(unittest.TestCase):
         self.assertIsNotNone(server.validate_generated_files(too_many)[1])
         too_large = {"index.html": "<html></html>", "app.js": "ok", "styles.css": "body{}", "manifest.webmanifest": '{"name":"Demo"}', "sw.js": "ok", "large.txt": "x" * 512_001}
         self.assertIsNotNone(server.validate_generated_files(too_large)[1])
+
+    def test_generated_files_reject_invalid_manifest_json(self):
+        files = {"index.html": "<html></html>", "app.js": "console.log('ok')", "styles.css": "body{}", "manifest.webmanifest": "{bad", "sw.js": "self.addEventListener('install',()=>{});"}
+        normalized, error = server.validate_generated_files(files)
+        self.assertIsNone(normalized)
+        self.assertIn("manifest.webmanifest", error)
+
+    @unittest.skipUnless(shutil.which("node"), "Node.js is required for generated JS syntax validation")
+    def test_generated_files_reject_invalid_javascript(self):
+        files = {"index.html": "<html></html>", "app.js": "function {", "styles.css": "body{}", "manifest.webmanifest": '{"name":"Demo"}', "sw.js": "self.addEventListener('install',()=>{});"}
+        normalized, error = server.validate_generated_files(files)
+        self.assertIsNone(normalized)
+        self.assertIn("JavaScript syntax validation", error)
 
     def test_generated_files_accept_safe_nested_assets(self):
         files = {"index.html": "<!doctype html><html></html>", "app.js": "console.log('ok')", "styles.css": "body{}", "manifest.webmanifest": '{"name":"Demo"}', "sw.js": "self.addEventListener('install',()=>{});", "assets/icon.svg": "<svg></svg>"}
