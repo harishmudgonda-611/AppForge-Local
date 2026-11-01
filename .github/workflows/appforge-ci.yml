@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   validate:
@@ -16,8 +16,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
@@ -171,15 +169,3 @@ jobs:
           for archive in AppForge-Local-Replica-Integrated-v3.zip "AppForge-Local-Advanced.zip"; do
             if [ -f "$archive" ]; then unzip -t "$archive"; fi
           done
-      - name: Commit extracted source tree
-        if: github.event_name == 'push' && steps.source.outputs.extracted == 'true'
-        shell: bash
-        run: |
-          set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add README.md .gitignore server.py advanced.py static tests config.example.json start.sh start.bat
-          if ! git diff --cached --quiet; then
-            git commit -m "feat: add AppForge Local v3 source tree"
-            git push origin "HEAD:${GITHUB_REF_NAME}"
-          fi
