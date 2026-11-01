@@ -314,6 +314,63 @@ class AppForgeHTTPTests(unittest.TestCase):
             finally:
                 server.WORKSPACE = original
 
+    def test_generate_endpoint_writes_only_validated_pwa_files(self):
+        import tempfile
+        from pathlib import Path
+        from unittest.mock import patch
+        original = server.WORKSPACE
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Path(tmp)
+            server.WORKSPACE = workspace
+            generated = {
+                "app_name": "Validated Demo",
+                "description": "Test app",
+                "files": {
+                    "index.html": "<!doctype html><html><body>Demo</body></html>",
+                    "app.js": "console.log('demo');",
+                    "styles.css": "body { margin: 0; }",
+                    "assets/icon.svg": "<svg></svg>"
+                }
+            }
+            def fake_llm(self, system, user, raw=False):
+                self.assertTrue(raw)
+                return {"ok": True, "data": generated, "text": "{}"}
+            try:
+                with patch.object(server.Handler, "call_llm", fake_llm):
+                    status, data = self.post_json("/api/generate", {
+                        "slug": "ValidatedDemo",
+                        "brief": "Build a useful offline-first demo application for testing."
+                    })
+                self.assertEqual(status, 200, data)
+                self.assertTrue((workspace / "ValidatedDemo/index.html").is_file())
+                self.assertTrue((workspace / "ValidatedDemo/assets/icon.svg").is_file())
+                manifest = json.loads((workspace / "ValidatedDemo/appforge-project.json").read_text())
+                self.assertEqual(manifest["files"], data["files"])
+            finally:
+                server.WORKSPACE = original
+
+    def test_generate_endpoint_rejects_incomplete_model_output_without_project(self):
+        import tempfile
+        from pathlib import Path
+        from unittest.mock import patch
+        original = server.WORKSPACE
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Path(tmp)
+            server.WORKSPACE = workspace
+            def fake_llm(self, system, user, raw=False):
+                return {"ok": True, "data": {"files": {"app.js": "console.log('missing html')"}}, "text": "{}"}
+            try:
+                with patch.object(server.Handler, "call_llm", fake_llm):
+                    status, data = self.post_json("/api/generate", {
+                        "slug": "InvalidDemo",
+                        "brief": "Build a useful offline-first demo application for testing."
+                    })
+                self.assertEqual(status, 422)
+                self.assertIn("index.html", data["error"])
+                self.assertFalse((workspace / "InvalidDemo").exists())
+            finally:
+                server.WORKSPACE = original
+
     def test_settings_reject_remote_model_endpoint(self):
         status, data = self.post_json(
             "/api/config",
