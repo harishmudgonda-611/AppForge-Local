@@ -29,11 +29,11 @@ class AppForgeHTTPTests(unittest.TestCase):
         with urllib.request.urlopen(self.base_url + path, timeout=3) as response:
             return response.status, json.loads(response.read().decode("utf-8"))
 
-    def post_json(self, path, payload):
+    def post_json(self, path, payload, extra_headers=None):
         request = urllib.request.Request(
             self.base_url + path,
             data=json.dumps(payload).encode("utf-8"),
-            headers={"Content-Type": "application/json"},
+            headers={"Content-Type": "application/json", **(extra_headers or {})},
             method="POST",
         )
         try:
@@ -102,6 +102,33 @@ class AppForgeHTTPTests(unittest.TestCase):
                 self.assertTrue(data["requires_approval"])
             finally:
                 server.WORKSPACE = original
+
+    def test_post_rejects_cross_origin_browser_request(self):
+        status, data = self.post_json(
+            "/api/feedback",
+            {"feedback": "should not be stored"},
+            {"Origin": "http://attacker.example"},
+        )
+        self.assertEqual(status, 403)
+        self.assertIn("same-origin", data["error"])
+
+    def test_post_rejects_non_loopback_host_header(self):
+        status, data = self.post_json(
+            "/api/feedback",
+            {"feedback": "should not be stored"},
+            {"Host": "attacker.example"},
+        )
+        self.assertEqual(status, 403)
+
+    def test_post_accepts_matching_local_origin(self):
+        origin = self.base_url
+        status, data = self.post_json(
+            "/api/feedback",
+            {"feedback": "local origin test"},
+            {"Origin": origin},
+        )
+        self.assertEqual(status, 200)
+        self.assertTrue(data["ok"])
 
     def test_home_page_is_served(self):
         with urllib.request.urlopen(self.base_url + "/", timeout=3) as response:
