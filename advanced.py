@@ -210,9 +210,12 @@ def replica_run(data, llm_fn):
     return {"status": 200, "body": {"ok": True, "project": name, "stage": stage_id, "title": stage["title"], "written": written, "completed_at": int(time.time()), "summary": str(result.get("summary", "Artifact saved locally."))[:2000], "checkpoint": checkpoint, "note": "AI-generated draft saved locally. Review it and run tests; no external deployment or store action occurred."}}
 
 def db():
-    if DB.is_symlink() or (DB.exists() and not DB.is_file()):
-        raise RuntimeError('AppForge SQLite database path must be a regular file, not a symlink or directory.')
-    c=sqlite3.connect(DB); c.row_factory=sqlite3.Row
+    for candidate in (DB, Path(str(DB) + '-wal'), Path(str(DB) + '-shm')):
+        if candidate.is_symlink() or (candidate.exists() and not candidate.is_file()):
+            raise RuntimeError('AppForge SQLite database and journal paths must be regular files, not symlinks or directories.')
+    c=sqlite3.connect(DB, timeout=30)
+    c.execute('PRAGMA busy_timeout=30000')
+    c.row_factory=sqlite3.Row
     c.execute('''CREATE TABLE IF NOT EXISTS apps (id INTEGER PRIMARY KEY, app_id TEXT, name TEXT, developer TEXT, category TEXT, store_url TEXT, icon TEXT, source TEXT, region TEXT, rank INTEGER, collected_at INTEGER, raw_json TEXT)''')
     c.execute('''CREATE INDEX IF NOT EXISTS idx_apps_history ON apps(app_id, collected_at)''')
     c.execute('''CREATE TABLE IF NOT EXISTS reviews (id INTEGER PRIMARY KEY, app_id TEXT, review_id TEXT, title TEXT, body TEXT, rating INTEGER, author TEXT, source_url TEXT, collected_at INTEGER, UNIQUE(app_id, review_id))''')
