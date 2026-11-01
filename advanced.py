@@ -388,7 +388,7 @@ def checkpoint_secret_findings(project):
     """Return paths/content markers that must never enter an AppForge Git checkpoint."""
     import fnmatch
     blocked_names = ('.env', '.env.*', '*.pem', '*.key', '*.p12', '*.pfx',
-                     '*.keystore', '*.jks', 'id_rsa', 'id_ed25519',
+                     '*.keystore', '*.jks', '*.mobileprovision', '*.provisionprofile', 'google-services.json', 'id_rsa', 'id_ed25519',
                      '*credentials*', '*secret*', '*token*', '*service-account*.json')
     secret_patterns = [
         re.compile(r'-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----'),
@@ -398,7 +398,7 @@ def checkpoint_secret_findings(project):
         re.compile(r'(?i)\b(?:api[_-]?key|access[_-]?token|client[_-]?secret)\s*[:=]\s*["\'][A-Za-z0-9_./+=:-]{16,}["\']'),
     ]
     findings=[]
-    excluded={'.git','node_modules','android','dist','build','.gradle','test-reports'}
+    excluded={'.git','node_modules','dist','build','.gradle','test-reports'}
     for root, dirs, files in os.walk(project, followlinks=False):
         dirs[:] = [d for d in dirs if d not in excluded and not (Path(root)/d).is_symlink()]
         for name in files:
