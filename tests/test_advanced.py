@@ -170,6 +170,31 @@ class AppForgeAdvancedTests(unittest.TestCase):
             self.assertTrue(findings)
             self.assertIn("possible credential content", findings[0])
 
+
+    def test_git_checkpoint_scans_android_source_for_signing_secrets(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            project = Path(tmp)
+            android = project / "android" / "app"
+            android.mkdir(parents=True)
+            (android / "release.jks").write_bytes(b"keystore")
+            (android / "google-services.json").write_text('{"api_key":"example"}')
+            findings = advanced.checkpoint_secret_findings(project)
+            self.assertTrue(any("release.jks" in item for item in findings))
+            self.assertTrue(any("google-services.json" in item for item in findings))
+
+    def test_git_checkpoint_detects_common_provider_tokens(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            project = Path(tmp)
+            token_a = "xoxb-" + ("A" * 24)
+            token_b = "sk_live_" + ("B" * 24)
+            token_c = "AIza" + ("C" * 36)
+            (project / "config.txt").write_text(
+                "slack=" + token_a + "\\nstripe=" + token_b + "\\ngoogle=" + token_c
+            )
+            findings = advanced.checkpoint_secret_findings(project)
+            self.assertTrue(findings)
+            self.assertIn("possible credential content", findings[0])
+
     def test_git_checkpoint_allows_normal_source_files(self):
         with tempfile.TemporaryDirectory() as tmp:
             project = Path(tmp)
