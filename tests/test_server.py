@@ -112,6 +112,44 @@ class AppForgeHTTPTests(unittest.TestCase):
             finally:
                 server.WORKSPACE = original
 
+    def test_approved_apk_build_installs_dependencies_and_adds_android_platform(self):
+        import tempfile
+        import subprocess
+        from pathlib import Path
+        from unittest.mock import patch
+        original = server.WORKSPACE
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Path(tmp)
+            project = workspace / "Demo"
+            project.mkdir()
+            (project / "package.json").write_text('{"scripts":{"build":"node build.js"}}')
+            server.WORKSPACE = workspace
+            commands = []
+            def fake_run(command, cwd=None, **kwargs):
+                commands.append(command)
+                if command[:4] == ["npx", "--no-install", "cap", "add"]:
+                    android = project / "android"
+                    android.mkdir()
+                    wrapper = android / "gradlew"
+                    wrapper.write_text("#!/bin/sh\\nexit 0\\n")
+                    wrapper.chmod(0o755)
+                if command[:1] == ["./gradlew"]:
+                    apk = project / "android/app/build/outputs/apk/debug/app-debug.apk"
+                    apk.parent.mkdir(parents=True)
+                    apk.write_bytes(b"verified-apk")
+                return subprocess.CompletedProcess(command, 0, "ok", "")
+            try:
+                with patch.object(server.subprocess, "run", side_effect=fake_run):
+                    status, data = self.post_json("/api/build", {"project": "Demo", "command": "apk", "approved": True})
+                self.assertEqual(status, 200, data)
+                self.assertTrue(data["artifact_verified"])
+                self.assertEqual(commands[0][:2], ["npm", "install"])
+                self.assertIn(["npx", "--no-install", "cap", "add", "android"], commands)
+                self.assertIn(["npx", "--no-install", "cap", "sync", "android"], commands)
+                self.assertTrue((project / "android/app/build/outputs/apk/debug/app-debug.apk").is_file())
+            finally:
+                server.WORKSPACE = original
+
     def test_post_rejects_cross_origin_browser_request(self):
         status, data = self.post_json(
             "/api/feedback",
