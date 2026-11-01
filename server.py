@@ -18,6 +18,8 @@ for _private_dir in (WORKSPACE, STATE):
 if CONFIG.is_symlink() or (CONFIG.exists() and not CONFIG.is_file()):
     raise RuntimeError('AppForge config.local.json must be a regular file, not a symlink or directory.')
 FEEDBACK = STATE / 'feedback.jsonl'
+if FEEDBACK.is_symlink() or (FEEDBACK.exists() and not FEEDBACK.is_file()):
+    raise RuntimeError('AppForge feedback.jsonl must be a regular file, not a symlink or directory.')
 ROADMAP = STATE / 'improvement-roadmap.json'
 DEFAULT_CONFIG = {'llm_base_url':'http://127.0.0.1:8080/v1','llm_model':'qwen2.5-coder','llm_api_key':'ollama','timeout_seconds':120}
 
