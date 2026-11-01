@@ -268,17 +268,36 @@ class Handler(SimpleHTTPRequestHandler):
                         'requires_approval':True,
                     }, 403)
                 package=project/'package.json'
-                if not package.exists(): return self.send_json({'error':'No package.json found. Generate/prepare a Capacitor-compatible project first.'},400)
+                if package.is_symlink() or not package.is_file(): return self.send_json({'error':'A real project package.json file is required.'},400)
+                android_dir=project/'android'
+                wrapper=android_dir/'gradlew'
+                if android_dir.is_symlink() or (android_dir.exists() and not android_dir.is_dir()):
+                    return self.send_json({'error':'Refusing to build through a symlinked or invalid android directory.'},400)
+                if wrapper.is_symlink() or (wrapper.exists() and not wrapper.is_file()):
+                    return self.send_json({'error':'Refusing to execute a symlinked or invalid Gradle wrapper.'},400)
+                # Reduce inherited command-injection/configuration variables. This is not a
+                # sandbox: approved project scripts and Gradle plugins still execute as this user.
+                build_env={}
+                for key in ('PATH','HOME','USERPROFILE','SYSTEMROOT','WINDIR','TEMP','TMP','TMPDIR',
+                            'JAVA_HOME','ANDROID_HOME','ANDROID_SDK_ROOT','ANDROID_USER_HOME'):
+                    if key in os.environ: build_env[key]=os.environ[key]
+                build_env.update({'CI':'true','npm_config_audit':'false','npm_config_fund':'false',
+                                  'GIT_TERMINAL_PROMPT':'0'})
                 try:
-                    proc=subprocess.run(['npm','run','build'],cwd=project,capture_output=True,text=True,timeout=300)
+                    proc=subprocess.run(['npm','run','build','--','--no-audit'],cwd=project,env=build_env,
+                                        stdin=subprocess.DEVNULL,capture_output=True,text=True,timeout=300)
                     if proc.returncode: return self.send_json({'ok':False,'stage':'web-build','stdout':proc.stdout[-6000:],'stderr':proc.stderr[-6000:]},500)
-                    proc2=subprocess.run(['npx','cap','sync','android'],cwd=project,capture_output=True,text=True,timeout=300)
+                    proc2=subprocess.run(['npx','--no-install','cap','sync','android'],cwd=project,env=build_env,
+                                         stdin=subprocess.DEVNULL,capture_output=True,text=True,timeout=300)
                     if proc2.returncode: return self.send_json({'ok':False,'stage':'capacitor-sync','stdout':proc2.stdout[-6000:],'stderr':proc2.stderr[-6000:]},500)
-                    wrapper=project/'android'/'gradlew'
-                    if not wrapper.exists(): return self.send_json({'ok':False,'stage':'gradle','error':'Gradle wrapper not found in Android project.'},400)
-                    proc3=subprocess.run(['./gradlew','assembleDebug'],cwd=project/'android',capture_output=True,text=True,timeout=600)
-                    apk=project/'android/app/build/outputs/apk/debug/app-debug.apk'
-                    success=proc3.returncode==0 and apk.is_file() and apk.stat().st_size>0
+                    if not wrapper.is_file() or wrapper.resolve().parent != android_dir.resolve():
+                        return self.send_json({'ok':False,'stage':'gradle','error':'A project-local Gradle wrapper is required.'},400)
+                    proc3=subprocess.run(['./gradlew','--no-daemon','--no-watch-fs','assembleDebug'],
+                                         cwd=android_dir,env=build_env,stdin=subprocess.DEVNULL,
+                                         capture_output=True,text=True,timeout=600)
+                    apk=android_dir/'app/build/outputs/apk/debug/app-debug.apk'
+                    success=(proc3.returncode==0 and not apk.is_symlink() and apk.is_file()
+                             and apk.stat().st_size>0 and apk.resolve().is_relative_to(project.resolve()))
                     return self.send_json({'ok':success,'stage':'gradle','stdout':proc3.stdout[-6000:],'stderr':proc3.stderr[-6000:],'apk':str(apk) if success else None,'artifact_verified':success},200 if success else 500)
                 except Exception as e: return self.send_json({'error':str(e),'message':'Install Node.js, Java JDK, Android SDK, and Gradle prerequisites; see README.'},500)
             return self.send_json({'error':'Unknown build command'},400)
