@@ -90,7 +90,7 @@ jobs:
           BADGING="$( "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging "$APK" )"
           printf '%s\n' "$BADGING" | grep -F "package: name='" >/dev/null
           EXPECTED_ID="$(node -p "require('./capacitor.config.json').appId")"
-          ACTUAL_ID="$(printf '%s\n' "$BADGING" | sed -n "s/^package: name='\\([^']*\\)'.*/\\1/p")"
+          ACTUAL_ID="$(printf '%s\n' "$BADGING" | sed -n "s/^package: name='\([^']*\)'.*/\1/p")"
           if [ "$ACTUAL_ID" != "$EXPECTED_ID" ]; then
             echo "APK package ID mismatch: expected $EXPECTED_ID, got $ACTUAL_ID"
             exit 1
