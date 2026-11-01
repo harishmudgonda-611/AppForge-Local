@@ -75,18 +75,26 @@ def replica_run(data, llm_fn):
         "evidence": str(data.get("context", ""))[:12000],
     }
     replica_dir = project / "replica"
+    # Never follow project-controlled symlinks while reading or writing workflow artifacts.
+    if replica_dir.is_symlink() or (replica_dir.exists() and not replica_dir.is_dir()):
+        return {"status": 409, "body": {"error": "The replica artifact path must be a real directory, not a symlink or file."}}
     prior = []
     if replica_dir.is_dir():
         for f in sorted(replica_dir.glob("*.md"))[-8:]:
             try:
-                if f.stat().st_size <= 60000:
-                    prior.append({"file": f.name, "content": f.read_text(errors="replace")[-9000:]})
+                if f.is_symlink():
+                    continue
+                resolved = f.resolve()
+                if project not in resolved.parents or not resolved.is_file():
+                    continue
+                if resolved.stat().st_size <= 60000:
+                    prior.append({"file": f.name, "content": resolved.read_text(errors="replace")[-9000:]})
             except OSError:
                 pass
     files = []
     if project.is_dir():
         for f in project.rglob("*"):
-            if f.is_file() and not any(x in {".git", "node_modules", "android", "dist", "build"} for x in f.parts):
+            if f.is_file() and not f.is_symlink() and not any(x in {".git", "node_modules", "android", "dist", "build"} for x in f.parts):
                 files.append(str(f.relative_to(project)))
                 if len(files) >= 100:
                     break
@@ -121,6 +129,11 @@ def replica_run(data, llm_fn):
         missing = {"index.html", "app.js", "styles.css"} - set(build_obj["files"])
         if missing:
             return {"status": 422, "body": {"error": "Build response is missing required app files: " + ", ".join(sorted(missing)), "written": []}}
+        # Existing top-level symlinks must not redirect generated source writes outside the project.
+        for rel in build_obj["files"]:
+            target = project / rel
+            if target.is_symlink() or target.resolve().parent != project:
+                return {"status": 409, "body": {"error": "Refusing to overwrite a symlinked or redirected project file: " + rel, "written": []}}
         manifest_text = build_obj["files"].get("manifest.webmanifest")
         if manifest_text:
             try:
@@ -147,6 +160,8 @@ def replica_run(data, llm_fn):
         meta = {"slug": name, "created_at": int(time.time()), "app_name": name, "description": "AppForge Replica workflow project", "workflow": "replica-skill-adapter"}
         (project / "appforge-project.json").write_text(json.dumps(meta, indent=2))
     replica_dir.mkdir(exist_ok=True)
+    if replica_dir.is_symlink() or replica_dir.resolve().parent != project:
+        return {"status": 409, "body": {"error": "Refusing to write workflow artifacts outside the project directory."}}
     written, checkpoint = [], None
     if stage_id == "replica-build":
         existing = [f for f in build_obj["files"] if (project / f).is_file()]
@@ -157,17 +172,24 @@ def replica_run(data, llm_fn):
         for rel, content in build_obj["files"].items():
             (project / rel).write_text(content)
             written.append(rel)
-        (replica_dir / "04-build-summary.md").write_text(str(build_obj.get("summary", "Original PWA files generated."))[:12000])
+        summary_path = replica_dir / "04-build-summary.md"
+        if summary_path.is_symlink():
+            return {"status": 409, "body": {"error": "Refusing to overwrite a symlinked workflow artifact.", "written": written}}
+        summary_path.write_text(str(build_obj.get("summary", "Original PWA files generated."))[:12000])
         written.append("replica/04-build-summary.md")
     else:
         filename = stage["artifact"].split("/")[-1]
         out = replica_dir / filename
+        if out.is_symlink():
+            return {"status": 409, "body": {"error": "Refusing to overwrite a symlinked workflow artifact.", "written": []}}
         content = str(result.get("text", "")).strip()
         if not content:
             return {"status": 502, "body": {"error": "Local model returned an empty artifact."}}
         out.write_text(content[:100000])
         written.append(str(out.relative_to(project)))
     state_path = replica_dir / "workflow-state.json"
+    if state_path.is_symlink():
+        return {"status": 409, "body": {"error": "Refusing to overwrite a symlinked workflow state file.", "written": written}}
     try:
         state = json.loads(state_path.read_text())
     except Exception:
