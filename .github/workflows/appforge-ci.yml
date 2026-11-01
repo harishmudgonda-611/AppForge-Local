@@ -64,7 +64,7 @@ jobs:
           set -euo pipefail
           package="AppForge-Local-source"
           mkdir -p "$package"
-          cp -a server.py advanced.py static tests README.md LICENSE SECURITY.md CONTRIBUTING.md config.example.json start.sh start.bat "$package/"
+          cp -a server.py advanced.py static tests README.md ANDROID-QUICKSTART.md LICENSE SECURITY.md CONTRIBUTING.md config.example.json start.sh start.bat android-setup.sh android-start.sh "$package/"
           find "$package" -type d -name __pycache__ -prune -exec rm -rf {} +
           find "$package" -type f -name '*.pyc' -delete
           zip -qr AppForge-Local-source.zip "$package"

@@ -43,6 +43,16 @@ class AppForgeHTTPTests(unittest.TestCase):
         except urllib.error.HTTPError as error:
             return error.code, json.loads(error.read().decode("utf-8"))
 
+    def test_local_model_auth_header_is_omitted_when_api_key_is_blank(self):
+        self.assertEqual(server.local_llm_headers({"llm_api_key": ""}), {"Content-Type": "application/json"})
+        self.assertEqual(server.local_llm_headers({"llm_api_key": "   "}), {"Content-Type": "application/json"})
+
+    def test_local_model_auth_header_uses_configured_key(self):
+        self.assertEqual(
+            server.local_llm_headers({"llm_api_key": "local-secret"}),
+            {"Content-Type": "application/json", "Authorization": "Bearer local-secret"},
+        )
+
     def test_local_model_json_response_is_size_limited(self):
         from io import BytesIO
         self.assertEqual(server.read_limited_json(BytesIO(b'{"ok":true}'), 32), {"ok": True})

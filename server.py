@@ -35,6 +35,16 @@ def local_endpoint_allowed(value):
     except Exception:
         return False
 
+
+def local_llm_headers(config):
+    """Build request headers without inventing an API key for local model servers."""
+    headers = {'Content-Type': 'application/json'}
+    api_key = str(config.get('llm_api_key', '')).strip()
+    if api_key:
+        headers['Authorization'] = 'Bearer ' + api_key
+    return headers
+
+
 def read_limited_json(response, limit=10_000_000):
     """Read a bounded JSON response from the configured local model server."""
     raw = response.read(limit + 1)
@@ -494,10 +504,7 @@ class Handler(SimpleHTTPRequestHandler):
             return {'ok':False,'error':'Local-first policy: Replica workflows only use localhost or a private LAN model endpoint.','hint':'Update Local AI settings to a local endpoint.'}
         url=base+'/chat/completions'
         payload={'model':cfg['llm_model'],'messages':[{'role':'system','content':system},{'role':'user','content':user}],'temperature':0.2}
-        headers={'Content-Type':'application/json'}
-        api_key=str(cfg.get('llm_api_key','')).strip()
-        if api_key: headers['Authorization']='Bearer '+api_key
-        req=urllib.request.Request(url,data=json.dumps(payload).encode(),headers=headers,method='POST')
+        req=urllib.request.Request(url,data=json.dumps(payload).encode(),headers=local_llm_headers(cfg),method='POST')
         try:
             with urllib.request.urlopen(req,timeout=max(10,min(int(cfg.get('timeout_seconds',120)),600))) as r: response=read_limited_json(r)
             text=response['choices'][0]['message']['content']
