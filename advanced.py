@@ -395,6 +395,10 @@ def checkpoint_secret_findings(project):
         re.compile(r'\bAKIA[0-9A-Z]{16}\b'),
         re.compile(r'\bgh[pousr]_[A-Za-z0-9]{20,}\b'),
         re.compile(r'\bgithub_pat_[A-Za-z0-9_]{20,}\b'),
+        re.compile(r'\bxox[baprs]-[A-Za-z0-9-]{20,}\b'),
+        re.compile(r'\bsk_live_[A-Za-z0-9]{16,}\b'),
+        re.compile(r'\bAIza[0-9A-Za-z_-]{30,}\b'),
+        re.compile(r'(?i)\b(?:aws_secret_access_key|npm_token)\s*[:=]\s*["\']?[A-Za-z0-9_./+=:-]{16,}'),
         re.compile(r'(?i)\b(?:api[_-]?key|access[_-]?token|client[_-]?secret)\s*[:=]\s*["\'][A-Za-z0-9_./+=:-]{16,}["\']'),
     ]
     findings=[]
