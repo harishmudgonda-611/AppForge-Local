@@ -330,15 +330,22 @@ class Handler(SimpleHTTPRequestHandler):
             written=[]
             for rel,content in files.items():
                 target=project/rel
-                target.parent.mkdir(parents=True,exist_ok=True)
-                # New generation folders must never contain pre-existing symlink parents.
+                # Check all existing parents before mkdir; then re-check after creation.
                 current=project
                 for part in Path(rel).parts[:-1]:
                     current=current/part
-                    if current.is_symlink():
-                        return self.send_json({'ok':False,'error':'Refusing to write through a symlinked generated-file directory.','project':name},409)
+                    if current.is_symlink() or (current.exists() and not current.is_dir()):
+                        return self.send_json({'ok':False,'error':'Refusing to write through an unsafe generated-file directory.','project':name},409)
                 if target.is_symlink() or target.exists():
                     return self.send_json({'ok':False,'error':'Refusing to overwrite an unexpected generated-file path.','project':name},409)
+                target.parent.mkdir(parents=True,exist_ok=True)
+                current=project
+                for part in Path(rel).parts[:-1]:
+                    current=current/part
+                    if current.is_symlink() or not current.is_dir():
+                        return self.send_json({'ok':False,'error':'Refusing to write through an unsafe generated-file directory.','project':name},409)
+                if target.is_symlink() or target.exists():
+                    return self.send_json({'ok':False,'error':'Generated file path changed during creation.','project':name},409)
                 target.write_text(content,encoding='utf-8')
                 written.append(rel)
             meta={'slug':name,'brief':brief,'created_at':int(time.time()),'app_name':str(obj.get('app_name',name))[:120],'description':str(obj.get('description',''))[:2000],'build_notes':str(obj.get('build_notes',''))[:6000],'tests':str(obj.get('tests',''))[:6000],'files':written}
