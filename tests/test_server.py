@@ -274,6 +274,18 @@ class AppForgeHTTPTests(unittest.TestCase):
             urllib.request.urlopen(request, timeout=3)
         self.assertEqual(error.exception.code, 403)
 
+
+    def test_get_rejects_cross_origin_browser_api_request(self):
+        request = urllib.request.Request(
+            self.base_url + "/api/health",
+            headers={"Origin": "http://attacker.example", "Sec-Fetch-Site": "cross-site"},
+        )
+        with self.assertRaises(urllib.error.HTTPError) as error:
+            urllib.request.urlopen(request, timeout=3)
+        self.assertEqual(error.exception.code, 403)
+        data = json.loads(error.exception.read().decode("utf-8"))
+        self.assertIn("same-origin", data["error"])
+
     def test_get_accepts_loopback_host_header(self):
         request = urllib.request.Request(self.base_url + "/api/health", headers={"Host": "127.0.0.1"})
         with urllib.request.urlopen(request, timeout=3) as response:
