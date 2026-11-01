@@ -175,6 +175,31 @@ class AppForgeHTTPTests(unittest.TestCase):
             finally:
                 server.WORKSPACE = original
 
+    def test_generated_files_require_nonempty_html_entrypoint(self):
+        for files in ({}, {"app.js": "console.log('missing html')"}, {"index.html": ""}):
+            normalized, error = server.validate_generated_files(files)
+            self.assertIsNone(normalized)
+            self.assertTrue(error)
+
+    def test_generated_files_reject_unsafe_and_windows_paths(self):
+        for path in ("../outside.txt", "assets\\\\secret.txt", "C:/outside.txt", "assets/<bad>.txt"):
+            normalized, error = server.validate_generated_files({"index.html": "<html></html>", path: "x"})
+            self.assertIsNone(normalized, path)
+            self.assertTrue(error, path)
+
+    def test_generated_files_enforce_count_and_size_limits(self):
+        too_many = {"index.html": "ok"}
+        too_many.update({f"asset-{i}.txt": "x" for i in range(80)})
+        self.assertIsNotNone(server.validate_generated_files(too_many)[1])
+        too_large = {"index.html": "<html></html>", "large.txt": "x" * 512_001}
+        self.assertIsNotNone(server.validate_generated_files(too_large)[1])
+
+    def test_generated_files_accept_safe_nested_assets(self):
+        files = {"index.html": "<!doctype html><html></html>", "assets/icon.svg": "<svg></svg>"}
+        normalized, error = server.validate_generated_files(files)
+        self.assertIsNone(error)
+        self.assertEqual(normalized, files)
+
     def test_settings_reject_remote_model_endpoint(self):
         status, data = self.post_json(
             "/api/config",
