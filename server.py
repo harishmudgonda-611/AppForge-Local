@@ -141,8 +141,9 @@ class Handler(SimpleHTTPRequestHandler):
                 ],'policy':'Review each repository license, security posture, dependencies, and maintenance status before vendoring or redistributing. Prefer adapters over copying entire projects.'}); return
             if p.path=='/api/projects':
                 projects=[]
-                for d in sorted(WORKSPACE.iterdir(),key=lambda x:x.stat().st_mtime,reverse=True):
-                    if d.is_dir(): projects.append({'name':d.name,'updated':int(d.stat().st_mtime),'files':[x.name for x in d.iterdir() if x.is_file()]})
+                for d in sorted(WORKSPACE.iterdir(),key=lambda x:x.lstat().st_mtime,reverse=True):
+                    if d.is_symlink() or not d.is_dir(): continue
+                    projects.append({'name':d.name,'updated':int(d.stat().st_mtime),'files':[x.name for x in d.iterdir() if x.is_file() and not x.is_symlink()]})
                 self.send_json({'projects':projects}); return
             if p.path=='/api/trends':
                 region=parse_qs(p.query).get('region',['in'])[0]
@@ -162,7 +163,9 @@ class Handler(SimpleHTTPRequestHandler):
         if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_-]{0,63}',project or ''): return None
         if filename and (Path(filename).name!=filename or filename in ('.','..')): return None
         workspace = WORKSPACE.resolve()
-        base = (workspace / project).resolve()
+        candidate = workspace / project
+        if candidate.is_symlink(): return None
+        base = candidate.resolve()
         if base.parent != workspace: return None
         if not filename: return base
         target = (base / filename).resolve()
