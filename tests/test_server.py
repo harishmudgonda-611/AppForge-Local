@@ -255,6 +255,16 @@ class AppForgeHTTPTests(unittest.TestCase):
         self.assertTrue(selectors)
         self.assertEqual(selectors - element_ids, set())
 
+    def test_pwa_manifest_declares_installable_png_icons(self):
+        manifest = json.loads((server.STATIC / "manifest.webmanifest").read_text(encoding="utf-8"))
+        icons = {icon["sizes"]: icon for icon in manifest["icons"]}
+        self.assertEqual(icons["192x192"]["type"], "image/png")
+        self.assertEqual(icons["512x512"]["type"], "image/png")
+        for icon in icons.values():
+            asset = server.STATIC / icon["src"].lstrip("/")
+            self.assertTrue(asset.is_file(), str(asset))
+            self.assertEqual(asset.read_bytes()[:8], b"\\x89PNG\\r\\n\\x1a\\n")
+
     def test_service_worker_precache_assets_exist(self):
         import re
         worker = (server.STATIC / "sw.js").read_text(encoding="utf-8")
