@@ -66,6 +66,15 @@ class AppForgeHTTPTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "too large"):
             handler.body()
 
+    def test_aider_and_repair_require_boolean_approval(self):
+        for path, payload in (
+            ("/api/aider/run", {"project": "Demo", "prompt": "Make a focused change", "approved": "false"}),
+            ("/api/test-repair", {"project": "Demo", "approved": 1}),
+        ):
+            status, data = self.post_json(path, payload)
+            self.assertEqual(status, 403)
+            self.assertTrue(data["requires_approval"])
+
     def test_apk_build_requires_explicit_approval_before_running_tools(self):
         import tempfile
         from pathlib import Path
