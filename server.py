@@ -77,22 +77,23 @@ def validate_generated_files(files):
     except Exception as exc:
         return None, 'manifest.webmanifest is invalid JSON: ' + str(exc)
     if shutil.which('node'):
-        temp_path = None
-        try:
-            with tempfile.NamedTemporaryFile('w', suffix='.js', encoding='utf-8', delete=False) as temp:
-                temp.write(normalized['app.js'])
-                temp_path = temp.name
-            checked = subprocess.run(['node', '--check', temp_path], capture_output=True, text=True, timeout=20)
-            if checked.returncode:
-                return None, 'Generated app.js failed JavaScript syntax validation: ' + checked.stderr[-1500:]
-        except Exception as exc:
-            return None, 'Could not validate generated JavaScript: ' + str(exc)
-        finally:
-            if temp_path:
-                try:
-                    Path(temp_path).unlink()
-                except OSError:
-                    pass
+        for js_name in ('app.js', 'sw.js'):
+            temp_path = None
+            try:
+                with tempfile.NamedTemporaryFile('w', suffix='.js', encoding='utf-8', delete=False) as temp:
+                    temp.write(normalized[js_name])
+                    temp_path = temp.name
+                checked = subprocess.run(['node', '--check', temp_path], capture_output=True, text=True, timeout=20)
+                if checked.returncode:
+                    return None, f'Generated {js_name} failed JavaScript syntax validation: ' + checked.stderr[-1500:]
+            except Exception as exc:
+                return None, f'Could not validate generated {js_name}: ' + str(exc)
+            finally:
+                if temp_path:
+                    try:
+                        Path(temp_path).unlink()
+                    except OSError:
+                        pass
     return normalized, None
 
 
