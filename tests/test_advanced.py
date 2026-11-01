@@ -214,6 +214,19 @@ class AppForgeAdvancedTests(unittest.TestCase):
             self.assertTrue(findings)
             self.assertIn("possible credential content", findings[0])
 
+    def test_git_checkpoint_scans_build_output_and_test_reports(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            project = Path(tmp)
+            dist = project / "dist"
+            reports = project / "test-reports"
+            dist.mkdir()
+            reports.mkdir()
+            (dist / "bundle.js").write_text("const api_key = 'super-secret-value-123456';")
+            (reports / "aider.json").write_text('{"access_token":"report-secret-value-123456"}')
+            findings = advanced.checkpoint_secret_findings(project)
+            self.assertTrue(any(item.startswith("dist/") for item in findings))
+            self.assertTrue(any(item.startswith("test-reports/") for item in findings))
+
     def test_git_checkpoint_allows_normal_source_files(self):
         with tempfile.TemporaryDirectory() as tmp:
             project = Path(tmp)
