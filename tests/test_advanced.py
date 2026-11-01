@@ -113,6 +113,59 @@ class AppForgeAdvancedTests(unittest.TestCase):
                 self.assertFalse((Path(t)/'ReplicaBadJS'/'app.js').exists())
             advanced.WORKSPACE = old
 
+
+    def test_git_action_disables_project_hooks(self):
+        old_workspace, old_state = advanced.WORKSPACE, advanced.STATE
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp); project = root / "HookProject"; project.mkdir()
+            state = root / "state"; state.mkdir()
+            advanced.WORKSPACE, advanced.STATE = root, state
+            marker = root / "hook-ran"
+            try:
+                (project / "README.md").write_text("initial")
+                first = advanced.git_action("HookProject", "checkpoint")
+                self.assertTrue(first["ok"], first)
+                hooks = project / ".git" / "hooks"; hooks.mkdir(exist_ok=True)
+                hook = hooks / "pre-commit"
+                hook.write_text("#!/bin/sh\\nprintf ran > " + str(marker) + "\\n")
+                hook.chmod(0o755)
+                (project / "README.md").write_text("changed")
+                second = advanced.git_action("HookProject", "checkpoint")
+                self.assertTrue(second["ok"], second)
+                self.assertFalse(marker.exists(), "Project-controlled pre-commit hook must not execute")
+            finally:
+                advanced.WORKSPACE, advanced.STATE = old_workspace, old_state
+
+    def test_git_action_rejects_symlinked_git_metadata(self):
+        old_workspace = advanced.WORKSPACE
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp); project = root / "GitLinkProject"; project.mkdir()
+            outside = root / "outside-git"; outside.mkdir()
+            (project / ".git").symlink_to(outside, target_is_directory=True)
+            advanced.WORKSPACE = root
+            try:
+                with self.assertRaisesRegex(ValueError, "cannot be a symlink"):
+                    advanced.git_action("GitLinkProject", "status")
+            finally:
+                advanced.WORKSPACE = old_workspace
+
+    def test_test_runner_does_not_execute_npm_scripts_by_default(self):
+        old_workspace = advanced.WORKSPACE
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp); project = root / "StaticOnly"; project.mkdir()
+            marker = root / "npm-ran"
+            (project / "index.html").write_text("<html></html>")
+            (project / "package.json").write_text(json.dumps({"scripts":{"test":"python -c \\\"open('" + str(marker) + "','w').write('ran')\\\""}}))
+            advanced.WORKSPACE = root
+            try:
+                with patch.object(advanced.shutil, "which", side_effect=lambda name: "/usr/bin/npm" if name == "npm" else None):
+                    result = advanced.test_project("StaticOnly")
+                self.assertTrue(result["ok"], result)
+                self.assertFalse(marker.exists())
+                self.assertNotIn("npm-test", [x["stage"] for x in result["logs"]])
+            finally:
+                advanced.WORKSPACE = old_workspace
+
     def test_repair_requires_approval(self):
         with self.assertRaises(ValueError): advanced.repair_project('NoSuchProject_abcdef',False)
 
