@@ -10,6 +10,22 @@ class AppForgeAdvancedTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "5 MB safety limit"):
                 advanced.request_json("https://example.invalid/feed", attempts=1)
 
+    def test_database_rejects_symlinked_storage_file(self):
+        old = advanced.DB
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            outside = root / "outside.db"
+            outside.write_text("not a database")
+            link = root / "appforge.db"
+            link.symlink_to(outside)
+            advanced.DB = link
+            try:
+                with self.assertRaisesRegex(RuntimeError, "must be a regular file"):
+                    advanced.db()
+                self.assertEqual(outside.read_text(), "not a database")
+            finally:
+                advanced.DB = old
+
     def test_repo_catalog_has_optional_adapter(self):
         d=advanced.repo_catalog(); self.assertTrue(any(x['name']=='Aider' for x in d['repositories']))
     def test_launch_config_checklist(self):
