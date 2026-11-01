@@ -145,6 +145,39 @@ class AppForgeAdvancedTests(unittest.TestCase):
             finally:
                 advanced.WORKSPACE = old_workspace
 
+
+    def test_git_checkpoint_blocks_sensitive_filename(self):
+        old_workspace, old_state = advanced.WORKSPACE, advanced.STATE
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp); project = root / "SecretProject"; project.mkdir()
+            state = root / "state"; state.mkdir()
+            advanced.WORKSPACE, advanced.STATE = root, state
+            try:
+                (project / "index.html").write_text("<html></html>")
+                (project / ".env").write_text("PRIVATE_TOKEN=do-not-commit")
+                result = advanced.git_action("SecretProject", "checkpoint")
+                self.assertFalse(result["ok"])
+                self.assertIn(".env", result["blocked_paths"][0])
+                self.assertFalse((project / ".git").exists(), "Secret scan should run before Git init")
+            finally:
+                advanced.WORKSPACE, advanced.STATE = old_workspace, old_state
+
+    def test_git_checkpoint_blocks_credential_like_content(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            project = Path(tmp)
+            (project / "notes.txt").write_text("credential = 'AKIA1234567890ABCDEF'")
+            findings = advanced.checkpoint_secret_findings(project)
+            self.assertTrue(findings)
+            self.assertIn("credential-like", findings[0])
+
+    def test_git_checkpoint_allows_normal_source_files(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            project = Path(tmp)
+            (project / "app.js").write_text("console.log('hello world')")
+            (project / "README.md").write_text("# Project")
+            self.assertEqual(advanced.checkpoint_secret_findings(project), [])
+
+
     def test_git_action_disables_project_hooks(self):
         old_workspace, old_state = advanced.WORKSPACE, advanced.STATE
         with tempfile.TemporaryDirectory() as tmp:
