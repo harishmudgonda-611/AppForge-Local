@@ -114,6 +114,37 @@ class AppForgeAdvancedTests(unittest.TestCase):
             advanced.WORKSPACE = old
 
 
+
+    def test_capacitor_rejects_symlinked_package_file(self):
+        old_workspace = advanced.WORKSPACE
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp); project = root / "CapSymlink"; project.mkdir()
+            (project / "index.html").write_text("<html></html>")
+            outside = root / "outside-package.json"; outside.write_text("keep")
+            (project / "package.json").symlink_to(outside)
+            advanced.WORKSPACE = root
+            try:
+                with self.assertRaisesRegex(ValueError, "symlinked scaffold path"):
+                    advanced.create_capacitor("CapSymlink")
+                self.assertEqual(outside.read_text(), "keep")
+            finally:
+                advanced.WORKSPACE = old_workspace
+
+    def test_test_runner_rejects_symlinked_report_directory(self):
+        old_workspace = advanced.WORKSPACE
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp); project = root / "ReportSymlink"; project.mkdir()
+            outside = root / "outside-reports"; outside.mkdir()
+            (project / "index.html").write_text("<html></html>")
+            (project / "test-reports").symlink_to(outside, target_is_directory=True)
+            advanced.WORKSPACE = root
+            try:
+                with self.assertRaisesRegex(ValueError, "test report"):
+                    advanced.test_project("ReportSymlink")
+                self.assertEqual(list(outside.iterdir()), [])
+            finally:
+                advanced.WORKSPACE = old_workspace
+
     def test_git_action_disables_project_hooks(self):
         old_workspace, old_state = advanced.WORKSPACE, advanced.STATE
         with tempfile.TemporaryDirectory() as tmp:
