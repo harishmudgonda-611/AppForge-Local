@@ -598,7 +598,11 @@ def repair_project(project_name, approved=False):
     url=cfg['llm_base_url'].rstrip('/')+'/chat/completions'
     req=urllib.request.Request(url,data=json.dumps(payload).encode(),headers={'Content-Type':'application/json','Authorization':'Bearer '+str(cfg.get('llm_api_key','ollama'))},method='POST')
     try:
-        with urllib.request.urlopen(req,timeout=int(cfg.get('timeout_seconds',120))) as r: response=json.loads(r.read())
+        with urllib.request.urlopen(req,timeout=max(5,min(int(cfg.get('timeout_seconds',120)),600))) as r:
+            raw = r.read(10_000_001)
+            if len(raw) > 10_000_000:
+                raise ValueError('Local repair response exceeds the 10 MB safety limit.')
+            response = json.loads(raw.decode('utf-8'))
         text=response['choices'][0]['message']['content'].strip(); text=re.sub(r'^```(?:json)?\s*|\s*```$','',text,flags=re.I)
         patch=json.loads(text)
         if not isinstance(patch.get('files'),dict) or not patch['files']: return {'ok':False,'error':'Model did not return a usable patch. No files changed.','before':first,'model_response':text[:4000]}
