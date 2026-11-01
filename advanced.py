@@ -384,6 +384,46 @@ def test_project(project_name, repair=False, call_llm=None, run_npm_tests=False)
     report_path.write_text(json.dumps(report,indent=2))
     return report
 
+def checkpoint_secret_findings(project):
+    """Return paths/content markers that must never enter an AppForge Git checkpoint."""
+    import fnmatch
+    blocked_names = ('.env', '.env.*', '*.pem', '*.key', '*.p12', '*.pfx',
+                     '*.keystore', '*.jks', 'id_rsa', 'id_ed25519',
+                     '*credentials*', '*secret*', '*token*', '*service-account*.json')
+    secret_patterns = [
+        re.compile(r'-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----'),
+        re.compile(r'\\bAKIA[0-9A-Z]{16}\\b'),
+        re.compile(r'\\bgh[pousr]_[A-Za-z0-9]{20,}\\b'),
+        re.compile(r'\\bgithub_pat_[A-Za-z0-9_]{20,}\\b'),
+        re.compile(r'(?i)\\b(?:api[_-]?key|access[_-]?token|client[_-]?secret)\\s*[:=]\\s*["\\'][A-Za-z0-9_./+=:-]{16,}["\\']'),
+    ]
+    findings=[]
+    excluded={'.git','node_modules','android','dist','build','.gradle','test-reports'}
+    for root, dirs, files in os.walk(project, followlinks=False):
+        dirs[:] = [d for d in dirs if d not in excluded and not (Path(root)/d).is_symlink()]
+        for name in files:
+            path=Path(root)/name
+            rel=path.relative_to(project).as_posix()
+            lower=name.lower()
+            if any(fnmatch.fnmatch(lower, pattern) for pattern in blocked_names):
+                findings.append(rel + ' (sensitive filename)')
+                continue
+            if path.is_symlink() or not path.is_file():
+                continue
+            try:
+                if path.stat().st_size > 5_000_000:
+                    continue
+                raw=path.read_bytes()
+                if b'\\x00' in raw[:4096]:
+                    continue
+                content=raw.decode('utf-8', errors='ignore')
+                if any(pattern.search(content) for pattern in secret_patterns):
+                    findings.append(rel + ' (possible credential content)')
+            except OSError:
+                findings.append(rel + ' (could not inspect)')
+    return findings
+
+
 def git_action(project_name, action):
     if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_-]{0,63}',project_name or ''): raise ValueError('Invalid project slug')
     p=(WORKSPACE/project_name).resolve()
@@ -408,6 +448,9 @@ def git_action(project_name, action):
         run_git(['config','user.email','appforge-local@localhost'],capture_output=True,text=True,timeout=10,check=True)
         run_git(['config','user.name','AppForge Local'],capture_output=True,text=True,timeout=10,check=True)
     if action=='checkpoint':
+        secret_findings=checkpoint_secret_findings(p)
+        if secret_findings:
+            return {'ok':False,'action':action,'error':'Checkpoint blocked: possible secrets or sensitive files were found. Move them outside the project or add an appropriate .gitignore rule, then retry.','blocked_paths':secret_findings[:30],'blocked_count':len(secret_findings)}
         run_git(['add','-A'],capture_output=True,timeout=30,check=True)
         proc=run_git(['commit','-m',f'AppForge checkpoint {int(time.time())}'],capture_output=True,text=True,timeout=30)
         if proc.returncode and 'nothing to commit' in (proc.stdout+' '+proc.stderr).lower():
