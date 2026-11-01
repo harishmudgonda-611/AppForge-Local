@@ -178,8 +178,10 @@ class Handler(SimpleHTTPRequestHandler):
             if self.path=='/api/replica/run':
                 result=advanced.replica_run(data,self.call_llm_data)
                 return self.send_json(result['body'],result.get('status',200))
-            if self.path=='/api/aider/run': return self.send_json(advanced.run_aider(str(data.get('project','')),str(data.get('prompt','')),bool(data.get('approved',False))))
-            if self.path=='/api/test-repair': return self.send_json(advanced.repair_project(str(data.get('project','')),bool(data.get('approved',False))))
+            if self.path in ('/api/aider/run','/api/test-repair') and data.get('approved') is not True:
+                return self.send_json({'error':'Explicit boolean approval is required for this operation.','requires_approval':True},403)
+            if self.path=='/api/aider/run': return self.send_json(advanced.run_aider(str(data.get('project','')),str(data.get('prompt','')),True))
+            if self.path=='/api/test-repair': return self.send_json(advanced.repair_project(str(data.get('project','')),True))
             if self.path=='/api/research/snapshot': return self.send_json(advanced.snapshot(str(data.get('region','in'))))
             if self.path=='/api/template/capacitor': return self.send_json(advanced.create_capacitor(str(data.get('project','')),data.get('app_name')))
             if self.path=='/api/test-run': return self.send_json(advanced.test_project(str(data.get('project','')),bool(data.get('repair',False))))
