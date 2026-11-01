@@ -131,5 +131,28 @@ class AppForgeAdvancedTests(unittest.TestCase):
             finally:
                 advanced.ROOT, advanced.WORKSPACE = old_root, old_workspace
 
+
+    def test_capacitor_scaffold_has_explicit_android_build_scripts(self):
+        old_workspace = advanced.WORKSPACE
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            project = root / "AndroidScaffoldTest"
+            project.mkdir()
+            (project / "index.html").write_text("<!doctype html><html></html>")
+            advanced.WORKSPACE = root
+            try:
+                result = advanced.create_capacitor("AndroidScaffoldTest", "Scaffold Test")
+                package = json.loads((project / "package.json").read_text())
+                config = json.loads((project / "capacitor.config.json").read_text())
+                self.assertTrue(result["ok"])
+                self.assertIn("android:add", package["scripts"])
+                self.assertIn("android:debug", package["scripts"])
+                self.assertEqual(config["webDir"], "dist")
+                self.assertEqual(result["apk_expected_path"], "android/app/build/outputs/apk/debug/app-debug.apk")
+                self.assertFalse((project / "android").exists())
+            finally:
+                advanced.WORKSPACE = old_workspace
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)
