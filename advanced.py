@@ -54,6 +54,73 @@ def replica_workflows():
     return {'name':'Replica Skill workflow adapter','upstream':REPLICA_UPSTREAM,'license':'MIT (upstream repository; preserve its notice if using upstream files)','integration':'AppForge-native workflow adapter. Upstream SKILL.md files/scripts are not bundled in this archive.','stages':REPLICA_STAGES,'safety':'Public information and user-supplied evidence only; clean-room implementation; no decompiling, private APIs, copied branding/content, credential access, or automatic publishing.'}
 
 
+
+def normalize_replica_files(build_obj):
+    """Normalize supported Replica model file-map shapes into a path/content dict."""
+    if not isinstance(build_obj, dict):
+        return {}
+    candidates = [build_obj.get("files"), build_obj.get("source_files"), build_obj.get("project_files")]
+    nested = build_obj.get("project")
+    if isinstance(nested, dict):
+        candidates.append(nested.get("files"))
+    for candidate in candidates:
+        if isinstance(candidate, dict):
+            files = {}
+            for path, value in candidate.items():
+                if isinstance(value, dict):
+                    value = value.get("content", value.get("code"))
+                if isinstance(path, str) and isinstance(value, str) and value.strip():
+                    files[path] = value
+            if files:
+                return files
+        elif isinstance(candidate, list):
+            files = {}
+            for item in candidate:
+                if not isinstance(item, dict):
+                    continue
+                path = item.get("path") or item.get("filename") or item.get("name")
+                value = item.get("content", item.get("code"))
+                if isinstance(path, str) and isinstance(value, str) and value.strip():
+                    files[path] = value
+            if files:
+                return files
+    return {}
+
+
+def generate_replica_split_files(llm_fn, project_name, context):
+    """Fallback to independent local model calls when structured files are unavailable."""
+    prompts = {
+        "index.html": "Return only complete mobile-first semantic HTML5 with viewport, accessibility labels and local app.js/styles.css references.",
+        "app.js": "Return only complete functional vanilla JavaScript. No CDN, imports or external runtime services.",
+        "styles.css": "Return only complete responsive CSS with visible focus states and readable contrast."
+    }
+    files = {}
+    for filename, instruction in prompts.items():
+        result = llm_fn(
+            "You are a senior frontend engineer. Return only the requested source file, without Markdown fences.",
+            "Project: " + project_name + "\nContext:\n" + json.dumps(context, ensure_ascii=False)[:12000] + "\nTask: " + instruction,
+            False
+        )
+        if not result or not result.get("ok") or not isinstance(result.get("text"), str):
+            return {}, "Local model failed while generating " + filename + "."
+        content = result["text"].strip()
+        fence = chr(96) * 3
+        if content.startswith(fence):
+            lines = content.splitlines()
+            if lines and lines[0].startswith(fence):
+                lines = lines[1:]
+            if lines and lines[-1].strip() == fence:
+                lines = lines[:-1]
+            content = "\n".join(lines).strip()
+        if len(content) < 80:
+            return {}, "Local model returned too little source for " + filename + "."
+        files[filename] = content
+    files["manifest.webmanifest"] = json.dumps({"name": project_name, "short_name": project_name[:24], "start_url": "./", "display": "standalone", "icons": []}, indent=2)
+    files["sw.js"] = "const CACHE='replica-v1';self.addEventListener('install',e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(['./','./index.html','./app.js','./styles.css','./manifest.webmanifest']))));"
+    files["README.md"] = "# " + project_name + "\n\nGenerated locally. Review and test before release.\n"
+    return files, None
+
+
 def replica_run(data, llm_fn):
     """Run one owner-approved local Replica workflow stage."""
     name = str(data.get("project", ""))
@@ -136,11 +203,17 @@ def replica_run(data, llm_fn):
     build_obj = None
     if stage_id == "replica-build":
         build_obj = result.get("data")
-        if not isinstance(build_obj, dict) or not isinstance(build_obj.get("files"), dict):
-            return {"status": 502, "body": {"error": "Model did not return valid JSON containing a files object. No app files were written."}}
+        if not isinstance(build_obj, dict):
+            return {"status": 502, "body": {"error": "Model did not return a JSON object. No app files were written."}}
+        build_files = normalize_replica_files(build_obj)
+        if not build_files:
+            build_files, split_error = generate_replica_split_files(llm_fn, name, context)
+            if split_error:
+                return {"status": 502, "body": {"error": "Model did not return a usable file map and split generation failed.", "detail": split_error, "written": []}}
         allowed = {"index.html", "app.js", "styles.css", "manifest.webmanifest", "sw.js", "README.md"}
-        if not build_obj["files"] or any(k not in allowed or not isinstance(v, str) or len(v) > 150000 for k, v in build_obj["files"].items()):
+        if not build_files or any(k not in allowed or not isinstance(v, str) or len(v.encode("utf-8")) > 512000 for k, v in build_files.items()):
             return {"status": 400, "body": {"error": "Build response contained unsafe paths or oversized files. No app files were written."}}
+        build_obj["files"] = build_files
         required = {"index.html", "app.js", "styles.css", "manifest.webmanifest", "sw.js"}
         missing = required - {k for k, v in build_obj["files"].items() if isinstance(v, str) and v.strip()}
         if missing:
