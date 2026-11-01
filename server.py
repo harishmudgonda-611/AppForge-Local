@@ -33,6 +33,14 @@ def local_endpoint_allowed(value):
     except Exception:
         return False
 
+def read_limited_json(response, limit=10_000_000):
+    """Read a bounded JSON response from the configured local model server."""
+    raw = response.read(limit + 1)
+    if len(raw) > limit:
+        raise ValueError(f'Local model response exceeds the {limit}-byte limit.')
+    return json.loads(raw.decode('utf-8'))
+
+
 def validate_generated_files(files):
     """Validate a model-generated PWA file map before writing anything to disk."""
     if not isinstance(files, dict) or not files:
@@ -434,7 +442,7 @@ class Handler(SimpleHTTPRequestHandler):
         payload={'model':cfg['llm_model'],'messages':[{'role':'system','content':system},{'role':'user','content':user}],'temperature':0.2}
         req=urllib.request.Request(url,data=json.dumps(payload).encode(),headers={'Content-Type':'application/json','Authorization':'Bearer '+str(cfg.get('llm_api_key','ollama'))},method='POST')
         try:
-            with urllib.request.urlopen(req,timeout=max(10,min(int(cfg.get('timeout_seconds',120)),600))) as r: response=json.loads(r.read())
+            with urllib.request.urlopen(req,timeout=max(10,min(int(cfg.get('timeout_seconds',120)),600))) as r: response=read_limited_json(r)
             text=response['choices'][0]['message']['content']
             if raw:
                 cleaned=text.strip()
@@ -444,7 +452,7 @@ class Handler(SimpleHTTPRequestHandler):
                 return {'ok':True,'text':text,'data':parsed}
             return {'ok':True,'text':text}
         except urllib.error.HTTPError as e:
-            return {'ok':False,'error':f'Local model returned HTTP {e.code}: {e.read().decode(errors="replace")[:1000]}','hint':'Check the local OpenAI-compatible server and model name.'}
+            return {'ok':False,'error':f'Local model returned HTTP {e.code}: {e.read(1000).decode(errors="replace")}','hint':'Check the local OpenAI-compatible server and model name.'}
         except Exception as e:
             return {'ok':False,'error':f'Could not reach local AI endpoint: {e}','hint':'Start the local model server and verify Local AI settings.'}
 
@@ -455,7 +463,7 @@ class Handler(SimpleHTTPRequestHandler):
         payload={'model':cfg['llm_model'],'messages':[{'role':'system','content':system},{'role':'user','content':user}], 'temperature':0.3}
         req=urllib.request.Request(url,data=json.dumps(payload).encode(),headers={'Content-Type':'application/json','Authorization':'Bearer '+cfg.get('llm_api_key','ollama')},method='POST')
         try:
-            with urllib.request.urlopen(req,timeout=int(cfg.get('timeout_seconds',120))) as r: resp=json.loads(r.read())
+            with urllib.request.urlopen(req,timeout=max(5,min(int(cfg.get('timeout_seconds',120)),600))) as r: resp=read_limited_json(r)
             txt=resp['choices'][0]['message']['content']
             if raw:
                 cleaned=txt.strip()
