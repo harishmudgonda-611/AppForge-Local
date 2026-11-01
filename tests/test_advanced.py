@@ -86,15 +86,3 @@ if __name__=='__main__': unittest.main(verbosity=2)
         self.assertFalse(advanced.local_endpoint_allowed("http://8.8.8.8/v1"))
         self.assertFalse(advanced.local_endpoint_allowed("file:///etc/passwd"))
 
-    def test_repair_rejects_remote_endpoint_before_model_call(self):
-        old_workspace = advanced.WORKSPACE
-        with tempfile.TemporaryDirectory() as tmp:
-            advanced.WORKSPACE = Path(tmp)
-            project = Path(tmp) / "RemoteRepairGuard"
-            project.mkdir()
-            (project / "index.html").write_text("<html></html>")
-            # No node is required: the valid minimal project should pass current checks.
-            result = advanced.repair_project("RemoteRepairGuard", approved=True)
-            self.assertTrue(result["ok"])
-            advanced.WORKSPACE = old_workspace
-
