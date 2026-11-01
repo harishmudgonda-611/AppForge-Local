@@ -227,6 +227,13 @@ class AppForgeAdvancedTests(unittest.TestCase):
             self.assertTrue(any(item.startswith("dist/") for item in findings))
             self.assertTrue(any(item.startswith("test-reports/") for item in findings))
 
+    def test_git_checkpoint_detects_json_quoted_credential_keys(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            project = Path(tmp)
+            (project / "report.json").write_text('{"access_token":"report-secret-value-123456"}')
+            findings = advanced.checkpoint_secret_findings(project)
+            self.assertTrue(any("report.json" in item for item in findings))
+
     def test_git_checkpoint_allows_normal_source_files(self):
         with tempfile.TemporaryDirectory() as tmp:
             project = Path(tmp)
