@@ -1,6 +1,7 @@
 """Regression tests for resilient local-model PWA generation."""
 import unittest
 import server
+import advanced
 
 
 class GenerationResilienceTests(unittest.TestCase):
@@ -36,6 +37,22 @@ class GenerationResilienceTests(unittest.TestCase):
         normalized, validation_error = server.validate_generated_files(files)
         self.assertIsNone(validation_error)
         self.assertEqual(set(normalized), set(files))
+
+
+    def test_replica_normalizes_list_of_file_records(self):
+        result = advanced.normalize_replica_files({"files":[{"path":"app.js","content":"console.log('ok')"}]})
+        self.assertEqual(result["app.js"], "console.log('ok')")
+
+    def test_replica_falls_back_when_model_returns_only_filenames(self):
+        calls = []
+        def fake_model(system, user, raw=False):
+            calls.append(user)
+            return {"ok":True,"text":"/* " + ("x" * 120) + " */"}
+        files, error = advanced.generate_replica_split_files(fake_model, "Demo", {"scope":"test"})
+        self.assertIsNone(error)
+        self.assertIn("index.html", files)
+        self.assertIn("manifest.webmanifest", files)
+        self.assertEqual(len(calls), 3)
 
 
 if __name__ == "__main__":
