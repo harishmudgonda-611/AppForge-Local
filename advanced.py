@@ -358,6 +358,7 @@ def create_capacitor(project_name, app_name=None):
 def test_project(project_name, repair=False, call_llm=None, run_npm_tests=False):
     if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_-]{0,63}',project_name or ''): raise ValueError('Invalid project slug')
     if (WORKSPACE/project_name).is_symlink(): raise ValueError('Project workspace entries cannot be symlinks.')
+    if (WORKSPACE/project_name).is_symlink(): raise ValueError('Project workspace entries cannot be symlinks.')
     p=(WORKSPACE/project_name).resolve()
     if p.parent!=WORKSPACE.resolve() or not p.is_dir(): raise ValueError('Project not found')
     logs=[]; failures=[]
@@ -439,6 +440,7 @@ def checkpoint_secret_findings(project):
 
 def git_action(project_name, action):
     if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_-]{0,63}',project_name or ''): raise ValueError('Invalid project slug')
+    if (WORKSPACE/project_name).is_symlink(): raise ValueError('Project workspace entries cannot be symlinks.')
     p=(WORKSPACE/project_name).resolve()
     if p.parent!=WORKSPACE.resolve() or not p.is_dir(): raise ValueError('Project not found')
     if not shutil.which('git'): return {'ok':False,'error':'Git is not installed'}
@@ -487,6 +489,7 @@ def run_aider(project_name, prompt, approved=False):
     if not approved: raise ValueError('Explicit approval is required before Aider can modify project files.')
     if not shutil.which('aider'): return {'ok':False,'installed':False,'error':'Aider CLI is not installed. Use a dedicated virtual environment and install aider-chat after reviewing upstream requirements.'}
     if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_-]{0,63}',project_name or ''): raise ValueError('Invalid project slug')
+    if (WORKSPACE/project_name).is_symlink(): raise ValueError('Project workspace entries cannot be symlinks.')
     p=(WORKSPACE/project_name).resolve()
     if p.parent!=WORKSPACE.resolve() or not p.is_dir(): raise ValueError('Project not found')
     if not isinstance(prompt,str) or len(prompt.strip())<10 or len(prompt)>4000: raise ValueError('Provide a focused change request between 10 and 4000 characters')
@@ -535,6 +538,7 @@ def repair_project(project_name, approved=False):
     if not approved: raise ValueError('Explicit approval is required before model-generated edits are applied.')
     first=test_project(project_name)
     if first['ok']: return {'ok':True,'message':'No repair needed; current checks passed.','before':first,'after':first}
+    if (WORKSPACE/project_name).is_symlink(): raise ValueError('Project workspace entries cannot be symlinks.')
     p=(WORKSPACE/project_name).resolve()
     cfg=json.loads((ROOT/'config.local.json').read_text())
     if not local_endpoint_allowed(cfg.get('llm_base_url', '')):
