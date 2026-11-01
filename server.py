@@ -58,7 +58,8 @@ def validate_generated_files(files):
         if path.is_absolute() or any(part in ('', '.', '..') or not re.fullmatch(r'[A-Za-z0-9_.-]{1,100}', part) for part in path.parts):
             return None, 'Generated file paths contain an unsupported or unsafe path segment.'
         filename = path.name.lower()
-        if (filename.startswith('.env') or filename.endswith(('.pem', '.key', '.p12', '.pfx', '.jks', '.keystore'))
+        if (filename.startswith('.env') or filename in ('google-services.json', 'id_rsa', 'id_ed25519', 'appforge-project.json', 'config.local.json')
+                or filename.endswith(('.pem', '.key', '.p12', '.pfx', '.jks', '.keystore', '.mobileprovision', '.provisionprofile', '.p8', '.ppk'))
                 or any(marker in filename for marker in ('credential', 'secret', 'token', 'service-account'))):
             return None, f'Generated file {rel} has a sensitive filename and is not allowed.'
         if not isinstance(content, str):
