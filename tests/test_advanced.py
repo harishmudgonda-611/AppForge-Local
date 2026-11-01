@@ -314,9 +314,13 @@ class AppForgeAdvancedTests(unittest.TestCase):
             reports.mkdir()
             (dist / "bundle.js").write_text("const api_key = 'super-secret-value-123456';")
             (reports / "aider.json").write_text('{"access_token":"report-secret-value-123456"}')
+            dependency = project / "node_modules" / "demo"
+            dependency.mkdir(parents=True)
+            (dependency / "config.js").write_text("const client_secret = 'dependency-secret-value-123456';")
             findings = advanced.checkpoint_secret_findings(project)
             self.assertTrue(any(item.startswith("dist/") for item in findings))
             self.assertTrue(any(item.startswith("test-reports/") for item in findings))
+            self.assertTrue(any(item.startswith("node_modules/") for item in findings))
 
     def test_git_checkpoint_detects_json_quoted_credential_keys(self):
         with tempfile.TemporaryDirectory() as tmp:
