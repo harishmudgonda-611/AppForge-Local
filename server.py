@@ -114,7 +114,18 @@ class Handler(SimpleHTTPRequestHandler):
         if not isinstance(data, dict):
             raise ValueError('Request body must be a JSON object')
         return data
+    def local_host_request_allowed(self):
+        """Reject unexpected Host headers, including DNS-rebinding hostnames."""
+        try:
+            parsed=urlparse('//'+self.headers.get('Host',''))
+            hostname=(parsed.hostname or '').lower().rstrip('.')
+            return hostname == 'localhost' or ipaddress.ip_address(hostname).is_loopback
+        except (ValueError, TypeError):
+            return False
+
     def do_GET(self):
+        if not self.local_host_request_allowed():
+            return self.send_json({'error':'Request rejected: AppForge is available only through a loopback Host header.'},403)
         p=urlparse(self.path)
         if p.path.startswith('/api/'):
             try:
