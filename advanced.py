@@ -219,7 +219,11 @@ def request_json(url, timeout=12, attempts=3):
     for i in range(attempts):
         try:
             req=urllib.request.Request(url,headers={'User-Agent':'AppForgeLocal/2.0 (+local app research)','Accept':'application/json'})
-            with urllib.request.urlopen(req,timeout=timeout) as r: return json.loads(r.read().decode('utf-8'))
+            with urllib.request.urlopen(req,timeout=timeout) as r:
+                raw = r.read(5_000_001)
+                if len(raw) > 5_000_000:
+                    raise ValueError('Public research response exceeds the 5 MB safety limit.')
+                return json.loads(raw.decode('utf-8'))
         except Exception as e:
             last=e
             if i<attempts-1: time.sleep(0.4*(2**i))
