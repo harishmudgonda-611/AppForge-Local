@@ -449,12 +449,20 @@ def checkpoint_secret_findings(project):
         re.compile(r'(?i)\b(?:api[_-]?key|access[_-]?token|client[_-]?secret)["\']?\s*[:=]\s*["\'][A-Za-z0-9_./+=:-]{16,}["\']'),
     ]
     findings=[]
-    # Scan build output and reports too: Git stages these unless the project ignores them.
-    # Only repository metadata, dependencies and Gradle's disposable cache are skipped.
-    excluded={'.git','node_modules','.gradle'}
+    # Scan every project-owned file Git may stage, including dependencies, build output and reports.
+    # Bound total work and fail closed rather than silently skipping uninspected files.
+    excluded={'.git','.gradle'}
+    scanned_bytes = 0
+    scanned_files = 0
+    max_scan_bytes = 250_000_000
+    max_scan_files = 50_000
     for root, dirs, files in os.walk(project, followlinks=False):
         dirs[:] = [d for d in dirs if d not in excluded and not (Path(root)/d).is_symlink()]
         for name in files:
+            scanned_files += 1
+            if scanned_files > max_scan_files:
+                findings.append('(project exceeds secret-scan file-count limit)')
+                return findings
             path=Path(root)/name
             rel=path.relative_to(project).as_posix()
             lower=name.lower()
@@ -464,9 +472,14 @@ def checkpoint_secret_findings(project):
             if path.is_symlink() or not path.is_file():
                 continue
             try:
-                if path.stat().st_size > 5_000_000:
+                size = path.stat().st_size
+                if size > 5_000_000:
                     findings.append(rel + ' (too large to inspect safely)')
                     continue
+                scanned_bytes += size
+                if scanned_bytes > max_scan_bytes:
+                    findings.append('(project exceeds secret-scan byte limit)')
+                    return findings
                 raw=path.read_bytes()
                 if b'\x00' in raw[:4096]:
                     continue
