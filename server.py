@@ -21,7 +21,7 @@ FEEDBACK = STATE / 'feedback.jsonl'
 if FEEDBACK.is_symlink() or (FEEDBACK.exists() and not FEEDBACK.is_file()):
     raise RuntimeError('AppForge feedback.jsonl must be a regular file, not a symlink or directory.')
 ROADMAP = STATE / 'improvement-roadmap.json'
-DEFAULT_CONFIG = {'llm_base_url':'http://127.0.0.1:8080/v1','llm_model':'qwen2.5-coder','llm_api_key':'ollama','timeout_seconds':120}
+DEFAULT_CONFIG = {'llm_base_url':'http://127.0.0.1:8080/v1','llm_model':'qwen2.5-coder','llm_api_key':'','timeout_seconds':120}
 
 def local_endpoint_allowed(value):
     try:
@@ -492,7 +492,10 @@ class Handler(SimpleHTTPRequestHandler):
             return {'ok':False,'error':'Local-first policy: Replica workflows only use localhost or a private LAN model endpoint.','hint':'Update Local AI settings to a local endpoint.'}
         url=base+'/chat/completions'
         payload={'model':cfg['llm_model'],'messages':[{'role':'system','content':system},{'role':'user','content':user}],'temperature':0.2}
-        req=urllib.request.Request(url,data=json.dumps(payload).encode(),headers={'Content-Type':'application/json','Authorization':'Bearer '+str(cfg.get('llm_api_key','ollama'))},method='POST')
+        headers={'Content-Type':'application/json'}
+        api_key=str(cfg.get('llm_api_key','')).strip()
+        if api_key: headers['Authorization']='Bearer '+api_key
+        req=urllib.request.Request(url,data=json.dumps(payload).encode(),headers=headers,method='POST')
         try:
             with urllib.request.urlopen(req,timeout=max(10,min(int(cfg.get('timeout_seconds',120)),600))) as r: response=read_limited_json(r)
             text=response['choices'][0]['message']['content']
