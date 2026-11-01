@@ -263,7 +263,7 @@ class AppForgeHTTPTests(unittest.TestCase):
         for icon in icons.values():
             asset = server.STATIC / icon["src"].lstrip("/")
             self.assertTrue(asset.is_file(), str(asset))
-            self.assertEqual(asset.read_bytes()[:8], b"\\x89PNG\\r\\n\\x1a\\n")
+            self.assertEqual(asset.read_bytes()[:8], b"\x89PNG\r\n\x1a\n")
 
     def test_service_worker_precache_assets_exist(self):
         import re
