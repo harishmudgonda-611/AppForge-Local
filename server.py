@@ -152,6 +152,31 @@ class Handler(SimpleHTTPRequestHandler):
                     self.send_json(result); return
                 except Exception as e:
                     self.send_json({'source':'Apple RSS unavailable','region':region,'apps':[],'error':str(e),'note':'Retries were attempted. Check connectivity or use App Store search; no rankings are invented.'},502); return
+            if p.path=='/api/apk':
+                name=q.get('project',[''])[0]
+                base=self.safe_path(name)
+                if not base or not base.is_dir():
+                    self.send_json({'error':'Project not found'},404); return
+                apk=base/'android'/'app'/'build'/'outputs'/'apk'/'debug'/'app-debug.apk'
+                current=base
+                for part in ('android','app','build','outputs','apk','debug','app-debug.apk'):
+                    current=current/part
+                    if current.is_symlink():
+                        self.send_json({'error':'APK artifact path contains a symlink.'},404); return
+                if not apk.is_file() or apk.stat().st_size<=0 or not apk.resolve().is_relative_to(base.resolve()):
+                    self.send_json({'error':'Verified debug APK not found. Run an approved build first.'},404); return
+                self.send_response(200)
+                self.send_header('Content-Type','application/vnd.android.package-archive')
+                self.send_header('Content-Length',str(apk.stat().st_size))
+                self.send_header('Content-Disposition','attachment; filename="app-debug.apk"')
+                self.send_header('Cache-Control','no-store')
+                self.end_headers()
+                with apk.open('rb') as artifact:
+                    while True:
+                        chunk=artifact.read(1024*1024)
+                        if not chunk: break
+                        self.wfile.write(chunk)
+                return
             if p.path=='/api/file':
                 name=parse_qs(p.query).get('project',[''])[0]; file=parse_qs(p.query).get('file',[''])[0]
                 target=self.safe_path(name,file)
@@ -365,7 +390,7 @@ class Handler(SimpleHTTPRequestHandler):
                     apk=android_dir/'app/build/outputs/apk/debug/app-debug.apk'
                     success=(proc3.returncode==0 and not apk.is_symlink() and apk.is_file()
                              and apk.stat().st_size>0 and apk.resolve().is_relative_to(project.resolve()))
-                    return self.send_json({'ok':success,'stage':'gradle','stdout':proc3.stdout[-6000:],'stderr':proc3.stderr[-6000:],'apk':str(apk) if success else None,'artifact_verified':success},200 if success else 500)
+                    return self.send_json({'ok':success,'stage':'gradle','stdout':proc3.stdout[-6000:],'stderr':proc3.stderr[-6000:],'apk':str(apk) if success else None,'download_url':('/api/apk?project='+name) if success else None,'artifact_verified':success},200 if success else 500)
                 except Exception as e: return self.send_json({'error':str(e),'message':'Install Node.js, Java JDK, Android SDK, and Gradle prerequisites; see README.'},500)
             return self.send_json({'error':'Unknown build command'},400)
         return self.send_json({'error':'Not found'},404)
