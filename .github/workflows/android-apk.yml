@@ -115,10 +115,13 @@ jobs:
           profile: pixel_2
           script: |
             set -euo pipefail
-            adb install -r "apps/\${{ steps.validate.outputs.app_slug }}/\${{ steps.apk.outputs.path }}"
-            adb shell am start -n com.appforge.androidsmoketest/.MainActivity
+            APP_DIR="apps/${{ steps.validate.outputs.app_slug }}"
+            APK_PATH="${{ steps.apk.outputs.path }}"
+            APP_ID="$(node -p "require('./$APP_DIR/capacitor.config.json').appId")"
+            adb install -r "$APP_DIR/$APK_PATH"
+            adb shell am start -n "$APP_ID/.MainActivity"
             sleep 8
-            adb shell dumpsys activity activities | grep -F "com.appforge.androidsmoketest"
+            adb shell dumpsys activity activities | grep -F "$APP_ID"
 
       - uses: actions/upload-artifact@v7
         with:
