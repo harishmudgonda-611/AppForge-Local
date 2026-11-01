@@ -38,11 +38,11 @@ def validate_generated_files(files):
     normalized = {}
     total = 0
     for rel, content in files.items():
-        if not isinstance(rel, str) or not rel or len(rel) > 160 or "\\\\" in rel:
+        if not isinstance(rel, str) or not rel or len(rel) > 160 or "\\" in rel:
             return None, 'Generated file paths must be short, relative POSIX paths.'
         path = Path(rel)
-        if path.is_absolute() or any(part in ('', '.', '..') for part in path.parts):
-            return None, 'Generated file paths cannot be absolute or contain traversal segments.'
+        if path.is_absolute() or any(part in ('', '.', '..') or not re.fullmatch(r'[A-Za-z0-9_.-]{1,100}', part) for part in path.parts):
+            return None, 'Generated file paths contain an unsupported or unsafe path segment.'
         if not isinstance(content, str):
             return None, f'Generated file {rel} must contain text.'
         size = len(content.encode('utf-8'))
