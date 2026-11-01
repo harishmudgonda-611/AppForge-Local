@@ -1,4 +1,5 @@
 import unittest, tempfile, json
+from unittest.mock import patch
 from pathlib import Path
 import advanced
 
@@ -85,4 +86,50 @@ if __name__=='__main__': unittest.main(verbosity=2)
         self.assertFalse(advanced.local_endpoint_allowed("https://example.com/v1"))
         self.assertFalse(advanced.local_endpoint_allowed("http://8.8.8.8/v1"))
         self.assertFalse(advanced.local_endpoint_allowed("file:///etc/passwd"))
+
+
+    def test_repair_refuses_remote_endpoint_before_checkpoint(self):
+        old_root, old_workspace = advanced.ROOT, advanced.WORKSPACE
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            workspace = root / "workspace"
+            workspace.mkdir()
+            project = workspace / "BrokenProject"
+            project.mkdir()
+            (root / "config.local.json").write_text(json.dumps({
+                "llm_base_url": "https://example.com/v1",
+                "llm_model": "test",
+                "timeout_seconds": 1
+            }))
+            advanced.ROOT, advanced.WORKSPACE = root, workspace
+            try:
+                with patch.object(advanced, "git_action") as checkpoint:
+                    result = advanced.repair_project("BrokenProject", approved=True)
+                self.assertFalse(result["ok"])
+                self.assertIn("Local-first policy", result["error"])
+                checkpoint.assert_not_called()
+            finally:
+                advanced.ROOT, advanced.WORKSPACE = old_root, old_workspace
+
+    def test_aider_refuses_remote_endpoint_before_checkpoint(self):
+        old_root, old_workspace = advanced.ROOT, advanced.WORKSPACE
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            workspace = root / "workspace"
+            workspace.mkdir()
+            (workspace / "DemoProject").mkdir()
+            (root / "config.local.json").write_text(json.dumps({
+                "llm_base_url": "https://example.com/v1",
+                "llm_model": "test"
+            }))
+            advanced.ROOT, advanced.WORKSPACE = root, workspace
+            try:
+                with patch.object(advanced.shutil, "which", return_value="/usr/bin/aider"):
+                    with patch.object(advanced, "git_action") as checkpoint:
+                        result = advanced.run_aider("DemoProject", "Please improve this app safely.", approved=True)
+                self.assertFalse(result["ok"])
+                self.assertIn("Local-first policy", result["error"])
+                checkpoint.assert_not_called()
+            finally:
+                advanced.ROOT, advanced.WORKSPACE = old_root, old_workspace
 
