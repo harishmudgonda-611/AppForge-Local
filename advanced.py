@@ -420,7 +420,9 @@ def checkpoint_secret_findings(project):
         re.compile(r'(?i)\b(?:api[_-]?key|access[_-]?token|client[_-]?secret)\s*[:=]\s*["\'][A-Za-z0-9_./+=:-]{16,}["\']'),
     ]
     findings=[]
-    excluded={'.git','node_modules','dist','build','.gradle','test-reports'}
+    # Scan build output and reports too: Git stages these unless the project ignores them.
+    # Only repository metadata, dependencies and Gradle's disposable cache are skipped.
+    excluded={'.git','node_modules','.gradle'}
     for root, dirs, files in os.walk(project, followlinks=False):
         dirs[:] = [d for d in dirs if d not in excluded and not (Path(root)/d).is_symlink()]
         for name in files:
