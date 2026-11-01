@@ -197,6 +197,8 @@ class AppForgeHTTPTests(unittest.TestCase):
                 self.assertEqual(status, 200, data)
                 self.assertTrue(data["artifact_verified"])
                 self.assertEqual(commands[0][:2], ["npm", "install"])
+                self.assertEqual(commands[1], ["npm", "test", "--if-present"])
+                self.assertEqual(commands[2][:3], ["npm", "run", "build"])
                 self.assertIn(["npx", "--no-install", "cap", "add", "android"], commands)
                 self.assertIn(["npx", "--no-install", "cap", "sync", "android"], commands)
                 self.assertTrue((project / "android/app/build/outputs/apk/debug/app-debug.apk").is_file())
