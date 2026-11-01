@@ -391,6 +391,12 @@ class Handler(SimpleHTTPRequestHandler):
                     }, 403)
                 package=project/'package.json'
                 if package.is_symlink() or not package.is_file(): return self.send_json({'error':'A real project package.json file is required.'},400)
+                package_lock=project/'package-lock.json'
+                node_modules=project/'node_modules'
+                if package_lock.is_symlink() or (package_lock.exists() and not package_lock.is_file()):
+                    return self.send_json({'error':'Refusing to use a symlinked or invalid package-lock.json.'},400)
+                if node_modules.is_symlink() or (node_modules.exists() and not node_modules.is_dir()):
+                    return self.send_json({'error':'Refusing to install dependencies through a symlinked or invalid node_modules path.'},400)
                 android_dir=project/'android'
                 wrapper=android_dir/'gradlew'
                 if android_dir.is_symlink() or (android_dir.exists() and not android_dir.is_dir()):
