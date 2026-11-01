@@ -240,6 +240,13 @@ class AppForgeAdvancedTests(unittest.TestCase):
             findings = advanced.checkpoint_secret_findings(project)
             self.assertTrue(any("report.json" in item for item in findings))
 
+    def test_git_checkpoint_blocks_files_too_large_to_scan(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            project = Path(tmp)
+            (project / "large-output.bin").write_bytes(b"x" * 5_000_001)
+            findings = advanced.checkpoint_secret_findings(project)
+            self.assertTrue(any("too large to inspect safely" in item for item in findings))
+
     def test_git_checkpoint_allows_normal_source_files(self):
         with tempfile.TemporaryDirectory() as tmp:
             project = Path(tmp)
