@@ -63,6 +63,8 @@ def replica_run(data, llm_fn):
         return {"status": 400, "body": {"error": "Explicit approval is required to generate and save stage artifacts."}}
     if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,63}", name or ""):
         return {"status": 400, "body": {"error": "Invalid project slug."}}
+    if (WORKSPACE / name).is_symlink():
+        return {"status": 409, "body": {"error": "Project workspace entries cannot be symlinks."}}
     project = (WORKSPACE / name).resolve()
     if project.parent != WORKSPACE.resolve():
         return {"status": 400, "body": {"error": "Invalid project path."}}
@@ -277,6 +279,8 @@ def create_capacitor(project_name, app_name=None):
     """Prepare a reproducible Capacitor project; does not install SDKs or claim an APK."""
     if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_-]{0,48}', project_name or ''):
         raise ValueError('Invalid project slug')
+    if (WORKSPACE / project_name).is_symlink():
+        raise ValueError('Project workspace entries cannot be symlinks.')
     p = (WORKSPACE / project_name).resolve()
     if p.parent != WORKSPACE.resolve() or not p.is_dir():
         raise ValueError('Project not found')
@@ -353,6 +357,7 @@ def create_capacitor(project_name, app_name=None):
 
 def test_project(project_name, repair=False, call_llm=None, run_npm_tests=False):
     if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_-]{0,63}',project_name or ''): raise ValueError('Invalid project slug')
+    if (WORKSPACE/project_name).is_symlink(): raise ValueError('Project workspace entries cannot be symlinks.')
     p=(WORKSPACE/project_name).resolve()
     if p.parent!=WORKSPACE.resolve() or not p.is_dir(): raise ValueError('Project not found')
     logs=[]; failures=[]
