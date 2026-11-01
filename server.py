@@ -486,10 +486,17 @@ class Handler(SimpleHTTPRequestHandler):
             if not result.get('ok'):
                 project.rmdir(); return self.send_json(result,502)
             obj=result.get('data')
-            if not isinstance(obj,dict) or not isinstance(obj.get('files'),dict):
-                (project/'generation-response.txt').write_text(result.get('text',''))
-                return self.send_json({'ok':False,'error':'Model response was not valid structured JSON. Raw response saved. Try a stronger model or shorter brief.','project':name,'raw':result.get('text','')},502)
-            files, file_error = validate_generated_files(obj.get('files'))
+            if not isinstance(obj,dict):
+                obj=extract_model_json(result.get('text','')) or {}
+            model_files=normalize_model_files(obj)
+            if not model_files:
+                model_files, split_error=generate_split_source_files(self.call_llm_data,name,brief)
+                if split_error:
+                    try: project.rmdir()
+                    except OSError: pass
+                    return self.send_json({'ok':False,'error':'The model did not return a usable file map and split generation failed.','detail':split_error,'project':name},502)
+                obj.setdefault('build_notes','Source files generated in separate local model calls because structured JSON was unavailable.')
+            files, file_error = validate_generated_files(model_files)
             if file_error:
                 for child in project.iterdir():
                     if child.is_file() or child.is_symlink(): child.unlink()
@@ -610,8 +617,7 @@ class Handler(SimpleHTTPRequestHandler):
             if raw:
                 cleaned=text.strip()
                 if cleaned.startswith('```'): cleaned=re.sub(r'^```(?:json)?\s*|\s*```$','',cleaned,flags=re.I)
-                try: parsed=json.loads(cleaned)
-                except Exception: parsed=None
+                parsed=extract_model_json(cleaned)
                 return {'ok':True,'text':text,'data':parsed}
             return {'ok':True,'text':text}
         except urllib.error.HTTPError as e:
@@ -624,7 +630,10 @@ class Handler(SimpleHTTPRequestHandler):
         if not local_endpoint_allowed(base): return self.send_json({'error':'For local-first safety, configure a localhost or private-LAN model endpoint only.'},400)
         url=base+'/chat/completions'
         payload={'model':cfg['llm_model'],'messages':[{'role':'system','content':system},{'role':'user','content':user}], 'temperature':0.3}
-        req=urllib.request.Request(url,data=json.dumps(payload).encode(),headers={'Content-Type':'application/json','Authorization':'Bearer '+cfg.get('llm_api_key','ollama')},method='POST')
+        headers={'Content-Type':'application/json'}
+        api_key=str(cfg.get('llm_api_key','')).strip()
+        if api_key: headers['Authorization']='Bearer '+api_key
+        req=urllib.request.Request(url,data=json.dumps(payload).encode(),headers=headers,method='POST')
         try:
             with urllib.request.urlopen(req,timeout=max(5,min(int(cfg.get('timeout_seconds',120)),600))) as r: resp=read_limited_json(r)
             txt=resp['choices'][0]['message']['content']
