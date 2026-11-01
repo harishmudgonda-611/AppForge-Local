@@ -392,10 +392,10 @@ def checkpoint_secret_findings(project):
                      '*credentials*', '*secret*', '*token*', '*service-account*.json')
     secret_patterns = [
         re.compile(r'-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----'),
-        re.compile(r'\${ch}AKIA[0-9A-Z]{16}\${ch}'),
-        re.compile(r'\${ch}gh[pousr]_[A-Za-z0-9]{20,}\${ch}'),
-        re.compile(r'\${ch}github_pat_[A-Za-z0-9_]{20,}\${ch}'),
-        re.compile(r'(?i)\${ch}(?:api[_-]?key|access[_-]?token|client[_-]?secret)\${ch}*[:=]\${ch}*["\\'][A-Za-z0-9_./+=:-]{16,}["\\']'),
+        re.compile(r'\bAKIA[0-9A-Z]{16}\b'),
+        re.compile(r'\bgh[pousr]_[A-Za-z0-9]{20,}\b'),
+        re.compile(r'\bgithub_pat_[A-Za-z0-9_]{20,}\b'),
+        re.compile(r'(?i)\b(?:api[_-]?key|access[_-]?token|client[_-]?secret)\s*[:=]\s*["\'][A-Za-z0-9_./+=:-]{16,}["\']'),
     ]
     findings=[]
     excluded={'.git','node_modules','android','dist','build','.gradle','test-reports'}
