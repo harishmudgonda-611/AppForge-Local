@@ -35,6 +35,45 @@ class AppForgeAdvancedTests(unittest.TestCase):
             self.assertTrue((Path(t)/'ReplicaUnitTest'/'replica'/'workflow-state.json').is_file())
             advanced.WORKSPACE = old
 
+    def test_replica_rejects_symlinked_artifact_directory(self):
+        old = advanced.WORKSPACE
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            project = root / "ReplicaSymlink"
+            project.mkdir()
+            outside = root / "outside"
+            outside.mkdir()
+            (project / "replica").symlink_to(outside, target_is_directory=True)
+            advanced.WORKSPACE = root
+            called = []
+            try:
+                fake = lambda *args: called.append(True) or {"ok": True, "text": "# Should not run"}
+                result = advanced.replica_run({"project": "ReplicaSymlink", "stage": "replica-architect", "approved": True}, fake)
+                self.assertEqual(result["status"], 409)
+                self.assertEqual(called, [])
+                self.assertEqual(list(outside.iterdir()), [])
+            finally:
+                advanced.WORKSPACE = old
+
+    def test_replica_build_rejects_symlinked_app_file(self):
+        old = advanced.WORKSPACE
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            project = root / "ReplicaFileSymlink"
+            project.mkdir()
+            outside = root / "outside.html"
+            outside.write_text("keep me")
+            (project / "index.html").symlink_to(outside)
+            advanced.WORKSPACE = root
+            try:
+                files = {"index.html": "<html></html>", "app.js": "console.log('x')", "styles.css": "body{}"}
+                fake = lambda *args: {"ok": True, "data": {"files": files}, "text": "{}"}
+                result = advanced.replica_run({"project": "ReplicaFileSymlink", "stage": "replica-build", "approved": True}, fake)
+                self.assertEqual(result["status"], 409)
+                self.assertEqual(outside.read_text(), "keep me")
+            finally:
+                advanced.WORKSPACE = old
+
     def test_replica_build_rejects_unsafe_file_paths(self):
         import tempfile
         old = advanced.WORKSPACE
