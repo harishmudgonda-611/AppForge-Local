@@ -10,7 +10,7 @@
 - Optional AI analysis and original source generation through a local OpenAI-compatible model endpoint.
 - Public Apple App Store search and top-free chart snapshots, with source URLs and collection timestamps. These are not download or revenue metrics.
 - Local SQLite research history, review-feed collection where available, and manually recorded local analytics.
-- Project file checks, JavaScript syntax checks, owner-approved repair workflows, and Git checkpoints.
+- Static project checks (no package scripts execute by default), owner-approved repair workflows, and Git checkpoints.
 - An 11-stage Replica-inspired workflow adapter for research, architecture, design, build, test planning and release preflight.
 - A Capacitor Android scaffold. It does **not** mean an APK has been built or is ready for Play Store release.
 
@@ -65,7 +65,8 @@ For a fully local build, install Node.js, JDK 17, Android SDK command-line tools
 - Do not enable LAN binding: the current application has no authenticated LAN mode or session protection.
 - AI endpoints are restricted to localhost/private-LAN HTTP addresses. Do not put real secrets in prompts or generated project files.
 - Local project data, SQLite state and local model configuration are excluded from Git.
-- AI repair, coding-agent edits and local APK builds require explicit approval. APK builds execute project-controlled npm/Capacitor/Gradle tooling; inspect project files and dependencies first. Do not build untrusted projects.
+- AI repair, coding-agent edits, optional npm test execution and local APK builds require explicit approval. Static checks never execute package scripts. APK builds execute project-controlled npm/Capacitor/Gradle tooling; inspect project files and dependencies first. Do not build untrusted projects.
+- Git checkpoints override repository hook configuration with an empty hooks directory, so project-controlled Git hooks do not run. Symlinked or non-directory `.git` metadata is rejected. Checkpoints still stage all non-ignored files; review project contents and `.gitignore` before creating a checkpoint.
 
 ## Important limitations
 
