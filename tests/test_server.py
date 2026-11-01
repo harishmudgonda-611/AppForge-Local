@@ -292,6 +292,9 @@ class AppForgeHTTPTests(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertTrue(data["ok"])
         self.assertIn("llm_base_url", data)
+        self.assertIn("timeout_seconds", data)
+        self.assertIsInstance(data["api_key_configured"], bool)
+        self.assertNotIn("llm_api_key", data)
 
     def test_replica_workflow_catalog_has_eleven_stages(self):
         status, data = self.get_json("/api/replica/workflows")
@@ -550,6 +553,24 @@ class AppForgeHTTPTests(unittest.TestCase):
                 self.assertFalse((workspace / "InvalidDemo").exists())
             finally:
                 server.WORKSPACE = original
+
+    def test_config_update_preserves_saved_key_when_key_is_omitted(self):
+        original = server.CONFIG.read_text(encoding="utf-8")
+        try:
+            current = json.loads(original)
+            current["llm_api_key"] = "existing-local-secret"
+            server.CONFIG.write_text(json.dumps(current), encoding="utf-8")
+            status, data = self.post_json("/api/config", {
+                "llm_base_url": current["llm_base_url"],
+                "llm_model": current["llm_model"],
+                "timeout_seconds": current["timeout_seconds"],
+            })
+            self.assertEqual(status, 200, data)
+            saved = json.loads(server.CONFIG.read_text(encoding="utf-8"))
+            self.assertEqual(saved["llm_api_key"], "existing-local-secret")
+            self.assertNotIn("llm_api_key", data.get("config", {}))
+        finally:
+            server.CONFIG.write_text(original, encoding="utf-8")
 
     def test_settings_reject_remote_model_endpoint(self):
         status, data = self.post_json(
