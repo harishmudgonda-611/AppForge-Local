@@ -104,6 +104,50 @@ class AppForgeAdvancedTests(unittest.TestCase):
             finally:
                 advanced.WORKSPACE = old
 
+    def test_replica_build_preflights_symlinked_state_before_writing(self):
+        old = advanced.WORKSPACE
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            project = root / "ReplicaStateLink"
+            project.mkdir()
+            outside = root / "outside.json"
+            outside.write_text("{}")
+            replica = project / "replica"
+            replica.mkdir()
+            (replica / "workflow-state.json").symlink_to(outside)
+            advanced.WORKSPACE = root
+            files = {"index.html": "<html></html>", "app.js": "console.log('ok')", "styles.css": "body{}"}
+            fake = lambda *args: {"ok": True, "data": {"files": files}, "text": "{}"}
+            try:
+                result = advanced.replica_run({"project": "ReplicaStateLink", "stage": "replica-build", "approved": True}, fake)
+                self.assertEqual(result["status"], 409)
+                self.assertFalse((project / "index.html").exists())
+                self.assertEqual(outside.read_text(), "{}")
+            finally:
+                advanced.WORKSPACE = old
+
+    def test_replica_build_preflights_symlinked_summary_before_writing(self):
+        old = advanced.WORKSPACE
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            project = root / "ReplicaSummaryLink"
+            project.mkdir()
+            outside = root / "outside.md"
+            outside.write_text("keep")
+            replica = project / "replica"
+            replica.mkdir()
+            (replica / "04-build-summary.md").symlink_to(outside)
+            advanced.WORKSPACE = root
+            files = {"index.html": "<html></html>", "app.js": "console.log('ok')", "styles.css": "body{}"}
+            fake = lambda *args: {"ok": True, "data": {"files": files}, "text": "{}"}
+            try:
+                result = advanced.replica_run({"project": "ReplicaSummaryLink", "stage": "replica-build", "approved": True}, fake)
+                self.assertEqual(result["status"], 409)
+                self.assertFalse((project / "index.html").exists())
+                self.assertEqual(outside.read_text(), "keep")
+            finally:
+                advanced.WORKSPACE = old
+
     def test_replica_build_rejects_symlinked_app_file(self):
         old = advanced.WORKSPACE
         with tempfile.TemporaryDirectory() as tmp:
