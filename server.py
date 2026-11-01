@@ -184,7 +184,7 @@ class Handler(SimpleHTTPRequestHandler):
             except ValueError as e: return self.send_json({'error':str(e),'retryable':False},400)
             except Exception as e: return self.send_json({'error':str(e),'retryable':True},502)
             if p.path=='/api/health':
-                cfg=json.loads(CONFIG.read_text()); self.send_json({'ok':True,'workspace':str(WORKSPACE),'llm_base_url':cfg['llm_base_url'],'llm_model':cfg['llm_model'],'time':int(time.time())}); return
+                cfg=json.loads(CONFIG.read_text()); self.send_json({'ok':True,'workspace':str(WORKSPACE),'llm_base_url':cfg['llm_base_url'],'llm_model':cfg['llm_model'],'timeout_seconds':cfg.get('timeout_seconds',120),'api_key_configured':bool(cfg.get('llm_api_key')),'time':int(time.time())}); return
             if p.path=='/api/replica/workflows':
                 self.send_json(advanced.replica_workflows()); return
             if p.path=='/api/repos':
