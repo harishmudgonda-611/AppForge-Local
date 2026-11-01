@@ -6,7 +6,12 @@ on:
       app_slug:
         description: "Committed PWA folder under apps/ (for example my-first-app)"
         required: true
+        default: android-smoke-test
         type: string
+  pull_request:
+    paths:
+      - ".github/workflows/android-apk.yml"
+      - "apps/android-smoke-test/**"
 
 permissions:
   contents: read
@@ -22,7 +27,7 @@ jobs:
         id: validate
         shell: bash
         env:
-          APP_SLUG: ${{ inputs.app_slug }}
+          APP_SLUG: ${{ inputs.app_slug || 'android-smoke-test' }}
         run: |
           set -euo pipefail
           if [[ ! "$APP_SLUG" =~ ^[A-Za-z0-9][A-Za-z0-9_-]{0,48}$ ]]; then
