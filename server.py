@@ -445,6 +445,10 @@ class Handler(SimpleHTTPRequestHandler):
                                            capture_output=True,text=True,timeout=300)
                     if install.returncode:
                         return self.send_json({'ok':False,'stage':'npm-install','stdout':install.stdout[-6000:],'stderr':install.stderr[-6000:]},500)
+                    tests=subprocess.run(['npm','test','--if-present'],cwd=project,env=build_env,
+                                         stdin=subprocess.DEVNULL,capture_output=True,text=True,timeout=300)
+                    if tests.returncode:
+                        return self.send_json({'ok':False,'stage':'npm-test','stdout':tests.stdout[-6000:],'stderr':tests.stderr[-6000:]},500)
                     proc=subprocess.run(['npm','run','build'],cwd=project,env=build_env,
                                         stdin=subprocess.DEVNULL,capture_output=True,text=True,timeout=300)
                     if proc.returncode: return self.send_json({'ok':False,'stage':'web-build','stdout':proc.stdout[-6000:],'stderr':proc.stderr[-6000:]},500)
