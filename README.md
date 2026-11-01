@@ -66,7 +66,8 @@ For a fully local build, install Node.js, JDK 17, Android SDK command-line tools
 - AI endpoints are restricted to localhost/private-LAN HTTP addresses. Do not put real secrets in prompts or generated project files.
 - Local project data, SQLite state and local model configuration are excluded from Git.
 - AI repair, coding-agent edits, optional npm test execution and local APK builds require explicit approval. Static checks never execute package scripts. APK builds execute project-controlled npm/Capacitor/Gradle tooling; inspect project files and dependencies first. Do not build untrusted projects.
-- Git checkpoints override repository hook configuration with an empty hooks directory, so project-controlled Git hooks do not run. Symlinked or non-directory `.git` metadata is rejected. Checkpoints still stage all non-ignored files; review project contents and `.gitignore` before creating a checkpoint.
+- Git checkpoints override repository hook configuration with an empty hooks directory, so project-controlled Git hooks do not run. Symlinked or non-directory `.git` metadata is rejected. Before staging, checkpoints scan filenames and text content for common secret indicators (environment files, private keys, cloud/API tokens and credential-like assignments) and block suspicious projects. This scanner is a safety net, not a guarantee; never place secrets in generated project folders.
+- Approved local APK builds use a reduced environment, non-interactive subprocesses, fixed commands, bounded timeouts, and symlink checks for Android build paths. This reduces accidental environment influence but is **not a sandbox**: npm scripts, Capacitor plugins and Gradle build logic still run with the AppForge user's permissions. Only build code and dependencies you trust; use a separate OS account or disposable build environment for untrusted projects.
 
 ## Important limitations
 
