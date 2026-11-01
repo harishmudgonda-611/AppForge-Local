@@ -417,7 +417,7 @@ def checkpoint_secret_findings(project):
         re.compile(r'\bsk_live_[A-Za-z0-9]{16,}\b'),
         re.compile(r'\bAIza[0-9A-Za-z_-]{30,}\b'),
         re.compile(r'(?i)\b(?:aws_secret_access_key|npm_token)\s*[:=]\s*["\']?[A-Za-z0-9_./+=:-]{16,}'),
-        re.compile(r'(?i)\b(?:api[_-]?key|access[_-]?token|client[_-]?secret)\s*[:=]\s*["\'][A-Za-z0-9_./+=:-]{16,}["\']'),
+        re.compile(r'(?i)\b(?:api[_-]?key|access[_-]?token|client[_-]?secret)["\']?\s*[:=]\s*["\'][A-Za-z0-9_./+=:-]{16,}["\']'),
     ]
     findings=[]
     # Scan build output and reports too: Git stages these unless the project ignores them.
