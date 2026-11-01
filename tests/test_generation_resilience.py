@@ -28,7 +28,7 @@ class GenerationResilienceTests(unittest.TestCase):
         calls = []
         def fake_model(system, user, raw=False):
             calls.append(user)
-            return {"ok":True,"text":"x" * 120}
+            return {"ok":True,"text":"/* " + ("x" * 120) + " */"}
         files, error = server.generate_split_source_files(fake_model,"Demo","Build a demo app")
         self.assertIsNone(error)
         self.assertEqual(set(files), {"index.html","app.js","styles.css","manifest.webmanifest","sw.js","README.md"})
