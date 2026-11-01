@@ -65,7 +65,7 @@ class AndroidWorkflowContractTests(unittest.TestCase):
         launcher = (ROOT / "android-start.sh").read_text(encoding="utf-8")
         self.assertIn("127.0.0.1:8787", guide)
         self.assertIn("pkg install -y python curl", setup)
-        self.assertIn("127.0.0.1:8787", launcher)
+        self.assertIn('BASE_URL="http://127.0.0.1:${PORT}"', launcher)
         self.assertIn("api/health", launcher)
         self.assertNotIn("0.0.0.0", launcher)
 
