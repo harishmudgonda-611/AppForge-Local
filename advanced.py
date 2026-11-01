@@ -4,9 +4,13 @@ from urllib.parse import urlencode
 import json, sqlite3, time, urllib.request, urllib.error, subprocess, shutil, re, os, tempfile
 
 ROOT = Path(__file__).resolve().parent
-STATE = ROOT / 'state'; STATE.mkdir(exist_ok=True)
+STATE = ROOT / 'state'
+WORKSPACE = ROOT / 'workspace'
+for _private_dir in (STATE, WORKSPACE):
+    if _private_dir.is_symlink() or (_private_dir.exists() and not _private_dir.is_dir()):
+        raise RuntimeError(f'AppForge data directory must be a real directory: {_private_dir.name}')
+    _private_dir.mkdir(exist_ok=True)
 DB = STATE / 'appforge.db'
-WORKSPACE = ROOT / 'workspace'; WORKSPACE.mkdir(exist_ok=True)
 
 
 def local_endpoint_allowed(value):
