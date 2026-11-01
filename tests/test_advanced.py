@@ -26,6 +26,23 @@ class AppForgeAdvancedTests(unittest.TestCase):
             finally:
                 advanced.DB = old
 
+    def test_database_rejects_symlinked_wal_journal(self):
+        old = advanced.DB
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            db_path = root / "appforge.db"
+            db_path.write_text("")
+            outside = root / "outside-wal"
+            outside.write_text("keep")
+            Path(str(db_path) + "-wal").symlink_to(outside)
+            advanced.DB = db_path
+            try:
+                with self.assertRaisesRegex(RuntimeError, "journal paths"):
+                    advanced.db()
+                self.assertEqual(outside.read_text(), "keep")
+            finally:
+                advanced.DB = old
+
     def test_public_storefront_inputs_are_validated(self):
         self.assertEqual(advanced.region_code("IN"), "in")
         for region in ("../us", "https://example.com", "USA", 123):
