@@ -141,6 +141,29 @@ class AppForgeHTTPTests(unittest.TestCase):
             finally:
                 server.WORKSPACE = original
 
+    def test_apk_build_rejects_symlinked_node_modules_before_execution(self):
+        import tempfile
+        from pathlib import Path
+        from unittest.mock import patch
+        original = server.WORKSPACE
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            project = root / "Demo"
+            project.mkdir()
+            (project / "package.json").write_text('{"scripts":{"build":"echo unsafe"}}')
+            outside = root / "outside-modules"
+            outside.mkdir()
+            (project / "node_modules").symlink_to(outside, target_is_directory=True)
+            server.WORKSPACE = root
+            try:
+                with patch.object(server.subprocess, "run") as runner:
+                    status, data = self.post_json("/api/build", {"project": "Demo", "command": "apk", "approved": True})
+                self.assertEqual(status, 400)
+                self.assertIn("node_modules", data["error"])
+                runner.assert_not_called()
+            finally:
+                server.WORKSPACE = original
+
     def test_approved_apk_build_installs_dependencies_and_adds_android_platform(self):
         import tempfile
         import subprocess
