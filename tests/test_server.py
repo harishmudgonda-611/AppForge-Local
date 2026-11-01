@@ -183,6 +183,17 @@ class AppForgeHTTPTests(unittest.TestCase):
             self.assertEqual(response.status, 200)
             self.assertIn("AppForge", body)
 
+    def test_get_rejects_non_loopback_host_header(self):
+        request = urllib.request.Request(self.base_url + "/api/health", headers={"Host": "attacker.example"})
+        with self.assertRaises(urllib.error.HTTPError) as error:
+            urllib.request.urlopen(request, timeout=3)
+        self.assertEqual(error.exception.code, 403)
+
+    def test_get_accepts_loopback_host_header(self):
+        request = urllib.request.Request(self.base_url + "/api/health", headers={"Host": "127.0.0.1"})
+        with urllib.request.urlopen(request, timeout=3) as response:
+            self.assertEqual(response.status, 200)
+
     def test_health_endpoint(self):
         status, data = self.get_json("/api/health")
         self.assertEqual(status, 200)
