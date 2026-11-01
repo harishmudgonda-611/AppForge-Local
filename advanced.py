@@ -440,6 +440,7 @@ def checkpoint_secret_findings(project):
                 continue
             try:
                 if path.stat().st_size > 5_000_000:
+                    findings.append(rel + ' (too large to inspect safely)')
                     continue
                 raw=path.read_bytes()
                 if b'\x00' in raw[:4096]:
