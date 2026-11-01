@@ -313,6 +313,36 @@ class AppForgeAdvancedTests(unittest.TestCase):
                 advanced.ROOT, advanced.WORKSPACE = old_root, old_workspace
 
 
+
+    def test_aider_rejects_symlinked_report_directory(self):
+        old_root, old_workspace = advanced.ROOT, advanced.WORKSPACE
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            workspace = root / "workspace"
+            workspace.mkdir()
+            project = workspace / "AiderReportLink"
+            project.mkdir()
+            outside = root / "outside"
+            outside.mkdir()
+            (project / "test-reports").symlink_to(outside, target_is_directory=True)
+            (root / "config.local.json").write_text(json.dumps({
+                "llm_base_url": "http://127.0.0.1:8080/v1",
+                "llm_model": "test-model",
+                "llm_api_key": "local"
+            }))
+            advanced.ROOT, advanced.WORKSPACE = root, workspace
+            try:
+                with patch.object(advanced.shutil, "which", return_value="/usr/bin/aider"):
+                    with patch.object(advanced, "git_action", return_value={"ok": True}):
+                        with patch.object(advanced.subprocess, "run") as runner:
+                            result = advanced.run_aider("AiderReportLink", "Make a safe focused improvement.", approved=True)
+                self.assertFalse(result["ok"])
+                self.assertIn("test-reports", result["error"])
+                runner.assert_not_called()
+                self.assertEqual(list(outside.iterdir()), [])
+            finally:
+                advanced.ROOT, advanced.WORKSPACE = old_root, old_workspace
+
     def test_capacitor_scaffold_has_explicit_android_build_scripts(self):
         old_workspace = advanced.WORKSPACE
         with tempfile.TemporaryDirectory() as tmp:
