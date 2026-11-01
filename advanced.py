@@ -383,7 +383,6 @@ def create_capacitor(project_name, app_name=None):
 def test_project(project_name, repair=False, call_llm=None, run_npm_tests=False):
     if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_-]{0,63}',project_name or ''): raise ValueError('Invalid project slug')
     if (WORKSPACE/project_name).is_symlink(): raise ValueError('Project workspace entries cannot be symlinks.')
-    if (WORKSPACE/project_name).is_symlink(): raise ValueError('Project workspace entries cannot be symlinks.')
     p=(WORKSPACE/project_name).resolve()
     if p.parent!=WORKSPACE.resolve() or not p.is_dir(): raise ValueError('Project not found')
     logs=[]; failures=[]
