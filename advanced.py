@@ -443,14 +443,14 @@ def git_action(project_name, action):
                     'GIT_CONFIG_VALUE_0':str(hooks_dir.resolve()),'GIT_TERMINAL_PROMPT':'0'})
     def run_git(args, **kwargs):
         return subprocess.run(['git']+args,cwd=p,env=git_env,**kwargs)
-    if not git_meta.exists():
-        run_git(['init'],capture_output=True,text=True,timeout=20,check=True)
-        run_git(['config','user.email','appforge-local@localhost'],capture_output=True,text=True,timeout=10,check=True)
-        run_git(['config','user.name','AppForge Local'],capture_output=True,text=True,timeout=10,check=True)
     if action=='checkpoint':
         secret_findings=checkpoint_secret_findings(p)
         if secret_findings:
             return {'ok':False,'action':action,'error':'Checkpoint blocked: possible secrets or sensitive files were found. Move them outside the project or add an appropriate .gitignore rule, then retry.','blocked_paths':secret_findings[:30],'blocked_count':len(secret_findings)}
+    if not git_meta.exists():
+        run_git(['init'],capture_output=True,text=True,timeout=20,check=True)
+        run_git(['config','user.email','appforge-local@localhost'],capture_output=True,text=True,timeout=10,check=True)
+        run_git(['config','user.name','AppForge Local'],capture_output=True,text=True,timeout=10,check=True)
         run_git(['add','-A'],capture_output=True,timeout=30,check=True)
         proc=run_git(['commit','-m',f'AppForge checkpoint {int(time.time())}'],capture_output=True,text=True,timeout=30)
         if proc.returncode and 'nothing to commit' in (proc.stdout+' '+proc.stderr).lower():
