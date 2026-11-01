@@ -114,7 +114,7 @@ jobs:
           arch: x86_64
           profile: pixel_2
           script: |
-            set -euo pipefail
+            set -eu
             APP_DIR="apps/${{ steps.validate.outputs.app_slug }}"
             APK_PATH="${{ steps.apk.outputs.path }}"
             APP_ID="$(node -p "require('./$APP_DIR/capacitor.config.json').appId")"
