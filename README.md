@@ -64,7 +64,7 @@ For a fully local build, install Node.js, JDK 17, Android SDK command-line tools
 - LAN binding is an advanced option and should only be used on a trusted private network.
 - AI endpoints are restricted to localhost/private-LAN HTTP addresses. Do not put real secrets in prompts or generated project files.
 - Local project data, SQLite state and local model configuration are excluded from Git.
-- AI repair and coding-agent operations require explicit approval. Review diffs and run tests before accepting edits.
+- AI repair, coding-agent edits and local APK builds require explicit approval. APK builds execute project-controlled npm/Capacitor/Gradle tooling; inspect project files and dependencies first. Do not build untrusted projects.
 
 ## Important limitations
 
