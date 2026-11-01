@@ -4,12 +4,14 @@ These checks validate workflow policy and command wiring. They do not replace
 running the workflow or installing the resulting APK on a device.
 """
 from pathlib import Path
+import json
 import unittest
 
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github" / "workflows" / "android-apk.yml"
 README = ROOT / "README.md"
+ANDROID_FIXTURE = ROOT / "apps" / "android-smoke-test"
 
 
 class AndroidWorkflowContractTests(unittest.TestCase):
@@ -45,6 +47,17 @@ class AndroidWorkflowContractTests(unittest.TestCase):
         self.assertIn("app-debug.apk", self.workflow)
         self.assertIn("APK-SHA256.txt", self.workflow)
         self.assertIn("if-no-files-found: error", self.workflow)
+
+    def test_committed_smoke_fixture_has_matching_lockfile(self):
+        package = json.loads((ANDROID_FIXTURE / "package.json").read_text(encoding="utf-8"))
+        lock = json.loads((ANDROID_FIXTURE / "package-lock.json").read_text(encoding="utf-8"))
+        config = json.loads((ANDROID_FIXTURE / "capacitor.config.json").read_text(encoding="utf-8"))
+        self.assertEqual(lock["lockfileVersion"], 3)
+        self.assertEqual(lock["packages"][""]["dependencies"], package["dependencies"])
+        self.assertEqual(config["webDir"], "dist")
+        self.assertTrue(config["appId"])
+        self.assertTrue((ANDROID_FIXTURE / "index.html").is_file())
+        self.assertTrue((ANDROID_FIXTURE / "build.mjs").is_file())
 
     def test_documentation_discloses_hosted_build_and_lockfile(self):
         self.assertIn("package-lock.json", self.readme)
