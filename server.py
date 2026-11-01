@@ -160,7 +160,8 @@ class Handler(SimpleHTTPRequestHandler):
             return self.send_json({'error':'Not found'},404)
         return super().do_GET()
     def safe_path(self, project, filename=''):
-        if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_-]{0,63}',project or ''): return None
+        if not isinstance(project, str) or not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_-]{0,63}', project): return None
+        if not isinstance(filename, str): return None
         if filename and (Path(filename).name!=filename or filename in ('.','..')): return None
         workspace = WORKSPACE.resolve()
         candidate = workspace / project
@@ -257,13 +258,18 @@ class Handler(SimpleHTTPRequestHandler):
             user='Review this current local state and suggest the next version roadmap. Distinguish evidence from hypotheses.\n'+json.dumps(context,ensure_ascii=False)[:18000]
             return self.call_llm(system,user)
         if self.path=='/api/analyze':
-            prompt=data.get('prompt','').strip()
-            if not prompt: return self.send_json({'error':'Add an app idea or competitor to analyze.'},400)
+            prompt=data.get('prompt','')
+            if not isinstance(prompt,str) or not prompt.strip(): return self.send_json({'error':'Add an app idea or competitor to analyze as text.'},400)
+            prompt=prompt.strip()[:12000]
             system='You are AppForge Local, an ethical app market researcher. Analyze only public-facing product positioning, features, reviews/complaints supplied by user, and opportunity hypotheses. Never claim live download/revenue data unless provided. Do not reproduce proprietary code, protected assets, or branding. Return practical sections: audience, problem, competitor comparison, likely gaps, differentiators, MVP, monetization, risks, validation experiments.'
             return self.call_llm(system,prompt)
         if self.path=='/api/generate':
-            name=re.sub(r'[^A-Za-z0-9_-]','',data.get('slug','NewApp'))[:48] or 'NewApp'
-            brief=data.get('brief','').strip()
+            slug=data.get('slug','NewApp')
+            brief=data.get('brief','')
+            if not isinstance(slug,str) or not isinstance(brief,str):
+                return self.send_json({'error':'Project slug and app brief must be text.'},400)
+            name=re.sub(r'[^A-Za-z0-9_-]','',slug)[:48] or 'NewApp'
+            brief=brief.strip()[:8000]
             if len(brief)<20: return self.send_json({'error':'Provide a detailed app brief (at least 20 characters).'},400)
             project=self.safe_path(name)
             if project.exists(): name=name[:42]+'_'+str(int(time.time()))[-6:]; project=self.safe_path(name)
