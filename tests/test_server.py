@@ -42,6 +42,12 @@ class AppForgeHTTPTests(unittest.TestCase):
         except urllib.error.HTTPError as error:
             return error.code, json.loads(error.read().decode("utf-8"))
 
+    def test_local_model_json_response_is_size_limited(self):
+        from io import BytesIO
+        self.assertEqual(server.read_limited_json(BytesIO(b'{"ok":true}'), 32), {"ok": True})
+        with self.assertRaisesRegex(ValueError, "response exceeds"):
+            server.read_limited_json(BytesIO(b'{"payload":"' + b'x' * 40 + b'"}'), 32)
+
     def test_request_body_rejects_negative_content_length(self):
         handler = object.__new__(server.Handler)
         handler.headers = Message()
