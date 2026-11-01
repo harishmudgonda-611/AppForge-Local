@@ -16,6 +16,8 @@ jobs:
     name: Build and verify debug APK
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+
       - name: Validate app slug and app directory
         id: validate
         shell: bash
@@ -27,9 +29,12 @@ jobs:
             echo "Invalid app slug. Use letters, numbers, underscore or hyphen."
             exit 1
           fi
+          APP_DIR="apps/$APP_SLUG"
+          if [[ -L "$APP_DIR" || ! -d "$APP_DIR" ]]; then
+            echo "App directory must be a real directory inside apps/."
+            exit 1
+          fi
           printf 'app_slug=%s\n' "$APP_SLUG" >> "$GITHUB_OUTPUT"
-
-      - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
         with:
@@ -47,8 +52,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test -d .
-          test ! -L .
+          test ! -L "apps/${{ steps.validate.outputs.app_slug }}"
           test -s package.json
           test -s capacitor.config.json
           test -s index.html
