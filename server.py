@@ -284,7 +284,7 @@ class Handler(SimpleHTTPRequestHandler):
                 build_env.update({'CI':'true','npm_config_audit':'false','npm_config_fund':'false',
                                   'GIT_TERMINAL_PROMPT':'0'})
                 try:
-                    proc=subprocess.run(['npm','run','build','--','--no-audit'],cwd=project,env=build_env,
+                    proc=subprocess.run(['npm','run','build'],cwd=project,env=build_env,
                                         stdin=subprocess.DEVNULL,capture_output=True,text=True,timeout=300)
                     if proc.returncode: return self.send_json({'ok':False,'stage':'web-build','stdout':proc.stdout[-6000:],'stderr':proc.stderr[-6000:]},500)
                     proc2=subprocess.run(['npx','--no-install','cap','sync','android'],cwd=project,env=build_env,
