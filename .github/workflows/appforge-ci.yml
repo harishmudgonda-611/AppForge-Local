@@ -67,14 +67,7 @@ jobs:
           find "$package" -type f -name '*.pyc' -delete
           zip -qr AppForge-Local-source.zip "$package"
           unzip -t AppForge-Local-source.zip
-          if unzip -l AppForge-Local-source.zip | grep -Eq '__pycache__|\\.pyc
-      - uses: actions/upload-artifact@v4
-        with:
-          name: AppForge-Local-source
-          path: AppForge-Local-source.zip
-          if-no-files-found: error
-          retention-days: 14
-; then
+          if unzip -l AppForge-Local-source.zip | grep -Eq '__pycache__|[.]pyc$'; then
             echo "Unexpected Python cache files in source artifact."
             exit 1
           fi
