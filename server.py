@@ -640,8 +640,7 @@ class Handler(SimpleHTTPRequestHandler):
             if raw:
                 cleaned=txt.strip()
                 if cleaned.startswith('```'): cleaned=re.sub(r'^```(?:json)?\s*|\s*```$','',cleaned,flags=re.I)
-                try: parsed=json.loads(cleaned)
-                except Exception: parsed=None
+                parsed=extract_model_json(cleaned)
                 return {'ok':True,'data':parsed,'text':txt}
             return self.send_json({'ok':True,'result':txt})
         except urllib.error.HTTPError as e:
