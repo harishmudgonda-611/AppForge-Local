@@ -257,6 +257,39 @@ class AppForgeAdvancedTests(unittest.TestCase):
             finally:
                 advanced.WORKSPACE = old_workspace
 
+    def test_requested_npm_test_fails_when_npm_is_unavailable(self):
+        old_workspace = advanced.WORKSPACE
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            project = root / "NoNpm"
+            project.mkdir()
+            (project / "index.html").write_text("<html></html>")
+            (project / "package.json").write_text('{"scripts":{"test":"node --test"}}')
+            advanced.WORKSPACE = root
+            try:
+                with patch.object(advanced.shutil, "which", return_value=None):
+                    result = advanced.test_project("NoNpm", run_npm_tests=True)
+                self.assertFalse(result["ok"])
+                self.assertTrue(any("npm is not installed" in x for x in result["failures"]))
+            finally:
+                advanced.WORKSPACE = old_workspace
+
+    def test_requested_npm_test_fails_without_package_json(self):
+        old_workspace = advanced.WORKSPACE
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            project = root / "NoPackage"
+            project.mkdir()
+            (project / "index.html").write_text("<html></html>")
+            advanced.WORKSPACE = root
+            try:
+                with patch.object(advanced.shutil, "which", return_value="/usr/bin/npm"):
+                    result = advanced.test_project("NoPackage", run_npm_tests=True)
+                self.assertFalse(result["ok"])
+                self.assertTrue(any("package.json is missing" in x for x in result["failures"]))
+            finally:
+                advanced.WORKSPACE = old_workspace
+
     def test_test_runner_does_not_execute_npm_scripts_by_default(self):
         old_workspace = advanced.WORKSPACE
         with tempfile.TemporaryDirectory() as tmp:
