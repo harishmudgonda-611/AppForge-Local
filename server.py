@@ -3,7 +3,7 @@
 from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
 from pathlib import Path
-import json, os, urllib.request, urllib.error, re, subprocess, threading, time, ipaddress
+import json, os, urllib.request, urllib.error, re, subprocess, threading, time, ipaddress, shutil, tempfile
 import advanced
 
 ROOT = Path(__file__).resolve().parent
@@ -76,6 +76,23 @@ def validate_generated_files(files):
             return None, 'manifest.webmanifest must be a JSON object with a non-empty name.'
     except Exception as exc:
         return None, 'manifest.webmanifest is invalid JSON: ' + str(exc)
+    if shutil.which('node'):
+        temp_path = None
+        try:
+            with tempfile.NamedTemporaryFile('w', suffix='.js', encoding='utf-8', delete=False) as temp:
+                temp.write(normalized['app.js'])
+                temp_path = temp.name
+            checked = subprocess.run(['node', '--check', temp_path], capture_output=True, text=True, timeout=20)
+            if checked.returncode:
+                return None, 'Generated app.js failed JavaScript syntax validation: ' + checked.stderr[-1500:]
+        except Exception as exc:
+            return None, 'Could not validate generated JavaScript: ' + str(exc)
+        finally:
+            if temp_path:
+                try:
+                    Path(temp_path).unlink()
+                except OSError:
+                    pass
     return normalized, None
 
 
