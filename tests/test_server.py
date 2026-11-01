@@ -305,19 +305,19 @@ class AppForgeHTTPTests(unittest.TestCase):
 
     def test_generated_files_reject_unsafe_and_windows_paths(self):
         for path in ("../outside.txt", "assets\\\\secret.txt", "C:/outside.txt", "assets/<bad>.txt"):
-            normalized, error = server.validate_generated_files({"index.html": "<html></html>", path: "x"})
+            normalized, error = server.validate_generated_files({"index.html": "<html></html>", "app.js": "ok", "styles.css": "body{}", "manifest.webmanifest": '{"name":"Demo"}', "sw.js": "ok", path: "x"})
             self.assertIsNone(normalized, path)
             self.assertTrue(error, path)
 
     def test_generated_files_enforce_count_and_size_limits(self):
-        too_many = {"index.html": "ok"}
+        too_many = {"index.html": "ok", "app.js": "ok", "styles.css": "body{}", "manifest.webmanifest": '{"name":"Demo"}', "sw.js": "ok"}
         too_many.update({f"asset-{i}.txt": "x" for i in range(80)})
         self.assertIsNotNone(server.validate_generated_files(too_many)[1])
-        too_large = {"index.html": "<html></html>", "large.txt": "x" * 512_001}
+        too_large = {"index.html": "<html></html>", "app.js": "ok", "styles.css": "body{}", "manifest.webmanifest": '{"name":"Demo"}', "sw.js": "ok", "large.txt": "x" * 512_001}
         self.assertIsNotNone(server.validate_generated_files(too_large)[1])
 
     def test_generated_files_accept_safe_nested_assets(self):
-        files = {"index.html": "<!doctype html><html></html>", "assets/icon.svg": "<svg></svg>"}
+        files = {"index.html": "<!doctype html><html></html>", "app.js": "console.log('ok')", "styles.css": "body{}", "manifest.webmanifest": '{"name":"Demo"}', "sw.js": "self.addEventListener('install',()=>{});", "assets/icon.svg": "<svg></svg>"}
         normalized, error = server.validate_generated_files(files)
         self.assertIsNone(error)
         self.assertEqual(normalized, files)
@@ -430,7 +430,7 @@ class AppForgeHTTPTests(unittest.TestCase):
             existing.mkdir()
             (existing / "keep.txt").write_text("preserve")
             server.WORKSPACE = workspace
-            generated = {"files": {"index.html": "<html>new</html>"}}
+            generated = {"files": {"index.html": "<html>new</html>", "app.js": "console.log('new')", "styles.css": "body{}", "manifest.webmanifest": '{"name":"New Demo"}', "sw.js": "self.addEventListener('install',()=>{});"}}
             def fake_llm(self, system, user, raw=False):
                 return {"ok": True, "data": generated, "text": "{}"}
             try:
@@ -461,6 +461,8 @@ class AppForgeHTTPTests(unittest.TestCase):
                     "index.html": "<!doctype html><html><body>Demo</body></html>",
                     "app.js": "console.log('demo');",
                     "styles.css": "body { margin: 0; }",
+                    "manifest.webmanifest": '{"name":"Validated Demo"}',
+                    "sw.js": "self.addEventListener('install',()=>{});",
                     "assets/icon.svg": "<svg></svg>"
                 }
             }
