@@ -12,7 +12,7 @@
 - Local SQLite research history, review-feed collection where available, and manually recorded local analytics.
 - Static project checks (no package scripts execute by default), owner-approved repair workflows, and Git checkpoints.
 - An 11-stage Replica-inspired workflow adapter for research, architecture, design, build, test planning and release preflight.
-- A Capacitor Android scaffold. It does **not** mean an APK has been built or is ready for Play Store release.
+- An optional Capacitor scaffold and verified debug-build pipeline for generated PWA projects. A smoke-test APK is not the complete AppForge Android product or a Play Store release.
 
 Google Play links are provided for manual research; this project does not claim to scrape or verify Google Play rankings. It aims to build original implementations and does not decompile or copy competitor source code, branding or protected assets.
 
@@ -21,7 +21,7 @@ Google Play links are provided for manual research; this project does not claim 
 - Python 3.10 or newer. The server uses the Python standard library; no third-party Python packages are required.
 - Optional local model server exposing an OpenAI-compatible `/v1/chat/completions` API (for example llama.cpp or Ollama).
 - Optional Node.js 22+ / npm for JavaScript project checks and generated-app workflows.
-- For the generated Capacitor 8 Android scaffold: Node.js 22+, Android Studio 2025.2.1+ (or compatible Android SDK command-line tools), JDK 17+, Android SDK Platform 36 and Build Tools 36.0.0. Capacitor 8.6.0's Android template targets API 36.
+- For the generated Capacitor 8 Android scaffold: Node.js 22+, Android Studio 2025.2.1+ (or compatible Android SDK command-line tools), JDK 21+, Android SDK Platform 36 and Build Tools 36.0.0. Capacitor 8.6.0's Android template targets API 36.
 
 ## Run locally
 
@@ -34,7 +34,7 @@ Google Play links are provided for manual research; this project does not claim 
 
 3. Open [http://127.0.0.1:8787](http://127.0.0.1:8787).
 
-On Windows, `start.bat` is available. On Android, run the server in a Python environment such as Termux and open the same localhost URL in Chrome.
+On Windows, `start.bat` is available. For Android, see [ANDROID-QUICKSTART.md](ANDROID-QUICKSTART.md) for the one-time Termux setup and a launcher that opens the installable PWA in Chrome. The Android PWA uses the phone-local Python server; it is not a standalone APK.
 
 The first run creates `config.local.json` from safe local defaults. Configure the URL and model name in **Settings** to match your local model server. The API key is optional: leave it blank for local servers that do not require authentication; AppForge omits the Authorization header when no key is set. The local config file is ignored by Git so personal settings are not committed. `config.example.json` documents the defaults.
 
@@ -52,11 +52,11 @@ GitHub Actions runs the same Python and JavaScript checks, archive integrity val
 
 ## Android APK build (opt-in GitHub Actions)
 
-The local Capacitor scaffold does not itself install Android SDK tools or produce an APK. For an optional hosted build, commit a generated PWA project under `apps/<app-slug>/` with its `package.json`, `capacitor.config.json`, and `index.html`. Then open **Actions → Build Android APK → Run workflow**, enter the app slug, and start the workflow. A successful run uploads a debug APK artifact for seven days.
+The local Capacitor scaffold does not itself install Android SDK tools or produce an APK. For an optional hosted build, commit a PWA project under `apps/<app-slug>/` with `package.json`, `package-lock.json`, `capacitor.config.json`, and `index.html`. This repository includes `apps/android-smoke-test/` as a minimal committed Capacitor 8 build fixture. Its dependency lockfile is pinned to the Capacitor 8.5.3 package graph and is used to verify the workflow end to end. For your own generated apps, create/update the lockfile with `npm install` on a trusted development machine, review it, and commit it with the app. The hosted build uses `npm ci` and fails if the lockfile is missing. Then open **Actions → Build Android APK → Run workflow**, enter `android-smoke-test` as the app slug, and start the workflow. The runner uses JDK 21 and Android SDK Platform 36. A successful run uploads a debug APK artifact for seven days.
 
-This workflow sends the committed app source to a GitHub-hosted runner. Use it only when you explicitly choose a hosted build; it is not local-only. It creates or syncs the Capacitor Android project, runs the app's available tests, builds a debug APK, verifies the file exists, and uploads it. It does not sign a production release, publish to Google Play, or store signing credentials. Do not commit secrets or private user data into the app folder.
+This workflow sends the committed app source to a GitHub-hosted runner. Use it only when you explicitly choose a hosted build; it is not local-only. It creates or syncs the Capacitor Android project, runs the app's available tests, builds a debug APK, checks APK archive integrity, verifies the embedded Android package ID matches `capacitor.config.json`, records a SHA-256 checksum, and uploads both the APK and checksum. It does not sign a production release, publish to Google Play, or store signing credentials. Do not commit secrets or private user data into the app folder.
 
-For a fully local build, install Node.js, JDK 17, Android SDK command-line tools and the required Android SDK platform/build-tools on your own build machine, then run the equivalent npm/Capacitor/Gradle commands there. The hosted workflow is optional and is not required to use the local PWA.
+For a fully local APK build, install Node.js 22+, JDK 21+, Android SDK command-line tools, Android SDK Platform 36 and Build Tools 36.0.0 on a supported build machine, then run the equivalent npm/Capacitor/Gradle commands there. Building the complete Python-backed AppForge server into a standalone Android APK is not currently supported; on Android, use the local PWA launcher described above. The hosted workflow is optional and is not required to use the local PWA.
 
 ## Security and privacy
 

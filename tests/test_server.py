@@ -43,6 +43,16 @@ class AppForgeHTTPTests(unittest.TestCase):
         except urllib.error.HTTPError as error:
             return error.code, json.loads(error.read().decode("utf-8"))
 
+    def test_local_model_auth_header_is_omitted_when_api_key_is_blank(self):
+        self.assertEqual(server.local_llm_headers({"llm_api_key": ""}), {"Content-Type": "application/json"})
+        self.assertEqual(server.local_llm_headers({"llm_api_key": "   "}), {"Content-Type": "application/json"})
+
+    def test_local_model_auth_header_uses_configured_key(self):
+        self.assertEqual(
+            server.local_llm_headers({"llm_api_key": "local-secret"}),
+            {"Content-Type": "application/json", "Authorization": "Bearer local-secret"},
+        )
+
     def test_local_model_json_response_is_size_limited(self):
         from io import BytesIO
         self.assertEqual(server.read_limited_json(BytesIO(b'{"ok":true}'), 32), {"ok": True})
@@ -244,6 +254,16 @@ class AppForgeHTTPTests(unittest.TestCase):
         selectors = set(re.findall(r"\$\('#([^']+)'\)", script))
         self.assertTrue(selectors)
         self.assertEqual(selectors - element_ids, set())
+
+    def test_pwa_manifest_declares_installable_png_icons(self):
+        manifest = json.loads((server.STATIC / "manifest.webmanifest").read_text(encoding="utf-8"))
+        icons = {icon["sizes"]: icon for icon in manifest["icons"]}
+        self.assertEqual(icons["192x192"]["type"], "image/png")
+        self.assertEqual(icons["512x512"]["type"], "image/png")
+        for icon in icons.values():
+            asset = server.STATIC / icon["src"].lstrip("/")
+            self.assertTrue(asset.is_file(), str(asset))
+            self.assertEqual(asset.read_bytes()[:8], b"\x89PNG\r\n\x1a\n")
 
     def test_service_worker_precache_assets_exist(self):
         import re

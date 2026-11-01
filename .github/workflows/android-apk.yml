@@ -6,7 +6,12 @@ on:
       app_slug:
         description: "Committed PWA folder under apps/ (for example my-first-app)"
         required: true
+        default: android-smoke-test
         type: string
+  pull_request:
+    paths:
+      - ".github/workflows/android-apk.yml"
+      - "apps/android-smoke-test/**"
 
 permissions:
   contents: read
@@ -22,7 +27,7 @@ jobs:
         id: validate
         shell: bash
         env:
-          APP_SLUG: ${{ inputs.app_slug }}
+          APP_SLUG: ${{ inputs.app_slug || 'android-smoke-test' }}
         run: |
           set -euo pipefail
           if [[ ! "$APP_SLUG" =~ ^[A-Za-z0-9][A-Za-z0-9_-]{0,48}$ ]]; then
@@ -43,9 +48,12 @@ jobs:
       - uses: actions/setup-java@v6
         with:
           distribution: temurin
-          java-version: "17"
+          java-version: "21"
 
       - uses: android-actions/setup-android@v4
+
+      - name: Accept Android SDK licenses
+        run: yes | sdkmanager --licenses > /dev/null 2>&1 || true
 
       - name: Install Capacitor 8 Android SDK packages
         run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
@@ -56,9 +64,11 @@ jobs:
         run: |
           set -euo pipefail
           test -s package.json
+          test -s package-lock.json
           test -s capacitor.config.json
           test -s index.html
-          if [ -f package-lock.json ]; then npm ci; else npm install; fi
+          node -e "const p=require('./package.json'); const deps={...p.dependencies,...p.devDependencies}; for (const name of ['@capacitor/core','@capacitor/cli','@capacitor/android']) { if (!deps[name]) throw new Error('Missing required dependency: '+name); } if (!p.scripts?.build) throw new Error('Missing build script'); const c=require('./capacitor.config.json'); if (!c.appId || c.webDir !== 'dist') throw new Error('Capacitor appId and webDir=dist are required');"
+          npm ci
           npm test --if-present
           npm run build
           test -s dist/index.html
@@ -84,12 +94,44 @@ jobs:
           set -euo pipefail
           APK="android/app/build/outputs/apk/debug/app-debug.apk"
           test -s "$APK"
+          unzip -t "$APK"
+          BADGING="$( "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging "$APK" )"
+          printf '%s\n' "$BADGING" | grep -F "package: name='" >/dev/null
+          EXPECTED_ID="$(node -p "require('./capacitor.config.json').appId")"
+          ACTUAL_ID="$(printf '%s\n' "$BADGING" | sed -n "s/^package: name='\([^']*\)'.*/\1/p")"
+          if [ "$ACTUAL_ID" != "$EXPECTED_ID" ]; then
+            echo "APK package ID mismatch: expected $EXPECTED_ID, got $ACTUAL_ID"
+            exit 1
+          fi
           echo "path=$APK" >> "$GITHUB_OUTPUT"
-          sha256sum "$APK"
+          sha256sum "$APK" | tee APK-SHA256.txt
+
+      - name: Enable KVM for Android emulator
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Install and launch APK on Android emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_atd
+          emulator-boot-timeout: 600
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
+          arch: x86_64
+          profile: pixel_2
+          script: |
+            adb install -r "apps/${{ steps.validate.outputs.app_slug }}/${{ steps.apk.outputs.path }}"
+            adb shell am start -n "$(node -p 'require("./apps/${{ steps.validate.outputs.app_slug }}/capacitor.config.json").appId')/.MainActivity"
+            sleep 8
+            adb shell dumpsys activity activities | grep -F "$(node -p 'require("./apps/${{ steps.validate.outputs.app_slug }}/capacitor.config.json").appId')"
 
       - uses: actions/upload-artifact@v7
         with:
           name: appforge-${{ steps.validate.outputs.app_slug }}-debug-apk
-          path: apps/${{ steps.validate.outputs.app_slug }}/${{ steps.apk.outputs.path }}
+          path: |
+            apps/${{ steps.validate.outputs.app_slug }}/${{ steps.apk.outputs.path }}
+            apps/${{ steps.validate.outputs.app_slug }}/APK-SHA256.txt
           if-no-files-found: error
           retention-days: 7
