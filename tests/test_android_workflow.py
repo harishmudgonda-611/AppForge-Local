@@ -29,6 +29,11 @@ class AndroidWorkflowContractTests(unittest.TestCase):
         self.assertIn("test -s dist/index.html", self.workflow)
         self.assertIn("c.webDir !== 'dist'", self.workflow)
 
+    def test_capacitor_8_android_toolchain_uses_jdk_21(self):
+        self.assertIn('java-version: "21"', self.workflow)
+        self.assertIn('sdkmanager --licenses', self.workflow)
+        self.assertIn('platforms;android-36', self.workflow)
+
     def test_apk_is_checked_and_identity_matches_config(self):
         self.assertIn("unzip -t", self.workflow)
         self.assertIn("aapt", self.workflow)
