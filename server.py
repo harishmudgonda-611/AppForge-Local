@@ -43,6 +43,112 @@ def read_limited_json(response, limit=10_000_000):
     return json.loads(raw.decode('utf-8'))
 
 
+
+def extract_model_json(content):
+    """Extract the first balanced JSON object from a local model response."""
+    if not isinstance(content, str):
+        return None
+    start = content.find("{")
+    if start < 0:
+        return None
+    depth = 0
+    quoted = False
+    escaped = False
+    for index in range(start, len(content)):
+        char = content[index]
+        if quoted:
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == '"':
+                quoted = False
+            continue
+        if char == '"':
+            quoted = True
+        elif char == "{":
+            depth += 1
+        elif char == "}":
+            depth -= 1
+            if depth == 0:
+                try:
+                    value = json.loads(content[start:index + 1])
+                    return value if isinstance(value, dict) else None
+                except Exception:
+                    return None
+    return None
+
+
+def normalize_model_files(obj):
+    """Normalize common local-model file response shapes without trusting paths."""
+    if not isinstance(obj, dict):
+        return {}
+    candidates = [obj.get("files"), obj.get("source_files"), obj.get("project_files")]
+    project = obj.get("project")
+    if isinstance(project, dict):
+        candidates.append(project.get("files"))
+    for candidate in candidates:
+        if isinstance(candidate, dict):
+            out = {}
+            for path, value in candidate.items():
+                if isinstance(value, dict):
+                    value = value.get("content", value.get("code"))
+                if isinstance(path, str) and isinstance(value, str) and value.strip():
+                    out[path] = value
+            if out:
+                return out
+        elif isinstance(candidate, list):
+            out = {}
+            for item in candidate:
+                if not isinstance(item, dict):
+                    continue
+                path = item.get("path") or item.get("filename") or item.get("name")
+                value = item.get("content", item.get("code"))
+                if isinstance(path, str) and isinstance(value, str) and value.strip():
+                    out[path] = value
+            if out:
+                return out
+    return {}
+
+
+def generate_split_source_files(call_model, slug, brief):
+    """Generate required source files separately when the model cannot return JSON."""
+    prompts = {
+        "index.html": "Return only complete semantic mobile-first HTML5. Include viewport, accessible labels, and local references to styles.css and app.js.",
+        "app.js": "Return only complete functional vanilla JavaScript. No imports, CDN, external services, or placeholder handlers.",
+        "styles.css": "Return only complete responsive mobile-first CSS with visible focus states and readable contrast."
+    }
+    files = {}
+    for filename, instruction in prompts.items():
+        response = call_model(
+            "You are a senior frontend engineer. Return only the requested complete source file. Do not use Markdown fences.",
+            "App slug: " + str(slug) + "\nApp brief:\n" + str(brief) + "\nTask: " + instruction,
+            False
+        )
+        if not response or not response.get("ok") or not isinstance(response.get("text"), str):
+            return {}, "Local model failed while generating " + filename + ": " + str((response or {}).get("error", "empty response"))
+        content = response["text"].strip()
+        fence = chr(96) * 3
+        if content.startswith(fence):
+            lines = content.splitlines()
+            if lines and lines[0].startswith(fence):
+                lines = lines[1:]
+            if lines and lines[-1].strip() == fence:
+                lines = lines[:-1]
+            content = "\n".join(lines).strip()
+        if len(content) < 80:
+            return {}, "Local model returned too little source for " + filename + "."
+        files[filename] = content
+    files["manifest.webmanifest"] = json.dumps({
+        "name": str(slug)[:80], "short_name": str(slug)[:24],
+        "start_url": "./", "display": "standalone",
+        "background_color": "#101827", "theme_color": "#101827", "icons": []
+    }, indent=2)
+    files["sw.js"] = "const CACHE='appforge-v1';self.addEventListener('install',e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(['./','./index.html','./styles.css','./app.js','./manifest.webmanifest']))));self.addEventListener('fetch',e=>{if(e.request.method==='GET')e.respondWith(caches.match(e.request).then(r=>r||fetch(e.request)));});"
+    files["README.md"] = "# " + str(slug) + "\n\nGenerated locally by AppForge. Review and test before release.\n"
+    return files, None
+
+
 def validate_generated_files(files):
     """Validate a model-generated PWA file map before writing anything to disk."""
     if not isinstance(files, dict) or not files:
@@ -380,10 +486,17 @@ class Handler(SimpleHTTPRequestHandler):
             if not result.get('ok'):
                 project.rmdir(); return self.send_json(result,502)
             obj=result.get('data')
-            if not isinstance(obj,dict) or not isinstance(obj.get('files'),dict):
-                (project/'generation-response.txt').write_text(result.get('text',''))
-                return self.send_json({'ok':False,'error':'Model response was not valid structured JSON. Raw response saved. Try a stronger model or shorter brief.','project':name,'raw':result.get('text','')},502)
-            files, file_error = validate_generated_files(obj.get('files'))
+            if not isinstance(obj,dict):
+                obj=extract_model_json(result.get('text','')) or {}
+            model_files=normalize_model_files(obj)
+            if not model_files:
+                model_files, split_error=generate_split_source_files(self.call_llm_data,name,brief)
+                if split_error:
+                    try: project.rmdir()
+                    except OSError: pass
+                    return self.send_json({'ok':False,'error':'The model did not return a usable file map and split generation failed.','detail':split_error,'project':name},502)
+                obj.setdefault('build_notes','Source files generated in separate local model calls because structured JSON was unavailable.')
+            files, file_error = validate_generated_files(model_files)
             if file_error:
                 for child in project.iterdir():
                     if child.is_file() or child.is_symlink(): child.unlink()
@@ -504,8 +617,7 @@ class Handler(SimpleHTTPRequestHandler):
             if raw:
                 cleaned=text.strip()
                 if cleaned.startswith('```'): cleaned=re.sub(r'^```(?:json)?\s*|\s*```$','',cleaned,flags=re.I)
-                try: parsed=json.loads(cleaned)
-                except Exception: parsed=None
+                parsed=extract_model_json(cleaned)
                 return {'ok':True,'text':text,'data':parsed}
             return {'ok':True,'text':text}
         except urllib.error.HTTPError as e:
@@ -518,15 +630,17 @@ class Handler(SimpleHTTPRequestHandler):
         if not local_endpoint_allowed(base): return self.send_json({'error':'For local-first safety, configure a localhost or private-LAN model endpoint only.'},400)
         url=base+'/chat/completions'
         payload={'model':cfg['llm_model'],'messages':[{'role':'system','content':system},{'role':'user','content':user}], 'temperature':0.3}
-        req=urllib.request.Request(url,data=json.dumps(payload).encode(),headers={'Content-Type':'application/json','Authorization':'Bearer '+cfg.get('llm_api_key','ollama')},method='POST')
+        headers={'Content-Type':'application/json'}
+        api_key=str(cfg.get('llm_api_key','')).strip()
+        if api_key: headers['Authorization']='Bearer '+api_key
+        req=urllib.request.Request(url,data=json.dumps(payload).encode(),headers=headers,method='POST')
         try:
             with urllib.request.urlopen(req,timeout=max(5,min(int(cfg.get('timeout_seconds',120)),600))) as r: resp=read_limited_json(r)
             txt=resp['choices'][0]['message']['content']
             if raw:
                 cleaned=txt.strip()
                 if cleaned.startswith('```'): cleaned=re.sub(r'^```(?:json)?\s*|\s*```$','',cleaned,flags=re.I)
-                try: parsed=json.loads(cleaned)
-                except Exception: parsed=None
+                parsed=extract_model_json(cleaned)
                 return {'ok':True,'data':parsed,'text':txt}
             return self.send_json({'ok':True,'result':txt})
         except urllib.error.HTTPError as e:
