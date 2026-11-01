@@ -8,6 +8,25 @@ class AppForgeAdvancedTests(unittest.TestCase):
         d=advanced.repo_catalog(); self.assertTrue(any(x['name']=='Aider' for x in d['repositories']))
     def test_launch_config_checklist(self):
         d=advanced.launch_config('unit-test-project'); self.assertGreaterEqual(len(d['checklist']),5)
+    def test_project_operations_reject_symlinked_workspace_root(self):
+        old = advanced.WORKSPACE
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            target = root / "RealProject"
+            target.mkdir()
+            (target / "index.html").write_text("<html></html>")
+            (root / "AliasProject").symlink_to(target, target_is_directory=True)
+            advanced.WORKSPACE = root
+            try:
+                with self.assertRaisesRegex(ValueError, "cannot be symlinks"):
+                    advanced.test_project("AliasProject")
+                with self.assertRaisesRegex(ValueError, "cannot be symlinks"):
+                    advanced.create_capacitor("AliasProject")
+                with self.assertRaisesRegex(ValueError, "cannot be symlinks"):
+                    advanced.git_action("AliasProject", "status")
+            finally:
+                advanced.WORKSPACE = old
+
     def test_capacitor_rejects_missing_project(self):
         with self.assertRaises(ValueError): advanced.create_capacitor('../outside')
     def test_test_runner_rejects_missing_project(self):
