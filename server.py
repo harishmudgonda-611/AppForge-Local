@@ -43,6 +43,112 @@ def read_limited_json(response, limit=10_000_000):
     return json.loads(raw.decode('utf-8'))
 
 
+
+def extract_model_json(content):
+    """Extract the first balanced JSON object from a local model response."""
+    if not isinstance(content, str):
+        return None
+    start = content.find("{")
+    if start < 0:
+        return None
+    depth = 0
+    quoted = False
+    escaped = False
+    for index in range(start, len(content)):
+        char = content[index]
+        if quoted:
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == '"':
+                quoted = False
+            continue
+        if char == '"':
+            quoted = True
+        elif char == "{":
+            depth += 1
+        elif char == "}":
+            depth -= 1
+            if depth == 0:
+                try:
+                    value = json.loads(content[start:index + 1])
+                    return value if isinstance(value, dict) else None
+                except Exception:
+                    return None
+    return None
+
+
+def normalize_model_files(obj):
+    """Normalize common local-model file response shapes without trusting paths."""
+    if not isinstance(obj, dict):
+        return {}
+    candidates = [obj.get("files"), obj.get("source_files"), obj.get("project_files")]
+    project = obj.get("project")
+    if isinstance(project, dict):
+        candidates.append(project.get("files"))
+    for candidate in candidates:
+        if isinstance(candidate, dict):
+            out = {}
+            for path, value in candidate.items():
+                if isinstance(value, dict):
+                    value = value.get("content", value.get("code"))
+                if isinstance(path, str) and isinstance(value, str) and value.strip():
+                    out[path] = value
+            if out:
+                return out
+        elif isinstance(candidate, list):
+            out = {}
+            for item in candidate:
+                if not isinstance(item, dict):
+                    continue
+                path = item.get("path") or item.get("filename") or item.get("name")
+                value = item.get("content", item.get("code"))
+                if isinstance(path, str) and isinstance(value, str) and value.strip():
+                    out[path] = value
+            if out:
+                return out
+    return {}
+
+
+def generate_split_source_files(call_model, slug, brief):
+    """Generate required source files separately when the model cannot return JSON."""
+    prompts = {
+        "index.html": "Return only complete semantic mobile-first HTML5. Include viewport, accessible labels, and local references to styles.css and app.js.",
+        "app.js": "Return only complete functional vanilla JavaScript. No imports, CDN, external services, or placeholder handlers.",
+        "styles.css": "Return only complete responsive mobile-first CSS with visible focus states and readable contrast."
+    }
+    files = {}
+    for filename, instruction in prompts.items():
+        response = call_model(
+            "You are a senior frontend engineer. Return only the requested complete source file. Do not use Markdown fences.",
+            "App slug: " + str(slug) + "\nApp brief:\n" + str(brief) + "\nTask: " + instruction,
+            False
+        )
+        if not response or not response.get("ok") or not isinstance(response.get("text"), str):
+            return {}, "Local model failed while generating " + filename + ": " + str((response or {}).get("error", "empty response"))
+        content = response["text"].strip()
+        fence = chr(96) * 3
+        if content.startswith(fence):
+            lines = content.splitlines()
+            if lines and lines[0].startswith(fence):
+                lines = lines[1:]
+            if lines and lines[-1].strip() == fence:
+                lines = lines[:-1]
+            content = "\n".join(lines).strip()
+        if len(content) < 80:
+            return {}, "Local model returned too little source for " + filename + "."
+        files[filename] = content
+    files["manifest.webmanifest"] = json.dumps({
+        "name": str(slug)[:80], "short_name": str(slug)[:24],
+        "start_url": "./", "display": "standalone",
+        "background_color": "#101827", "theme_color": "#101827", "icons": []
+    }, indent=2)
+    files["sw.js"] = "const CACHE='appforge-v1';self.addEventListener('install',e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(['./','./index.html','./styles.css','./app.js','./manifest.webmanifest']))));self.addEventListener('fetch',e=>{if(e.request.method==='GET')e.respondWith(caches.match(e.request).then(r=>r||fetch(e.request)));});"
+    files["README.md"] = "# " + str(slug) + "\n\nGenerated locally by AppForge. Review and test before release.\n"
+    return files, None
+
+
 def validate_generated_files(files):
     """Validate a model-generated PWA file map before writing anything to disk."""
     if not isinstance(files, dict) or not files:
