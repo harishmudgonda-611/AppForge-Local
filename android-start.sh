@@ -5,14 +5,14 @@ PORT="${APPFORGE_PORT:-8787}"
 BASE_URL="http://127.0.0.1:${PORT}"
 
 mkdir -p state
-if curl --silent --fail --max-time 2 ${BASE_URL}/api/health >/dev/null 2>&1; then
+if curl --silent --fail --max-time 2 "${BASE_URL}/api/health" >/dev/null 2>&1; then
   echo "AppForge is already running at ${BASE_URL}"
 else
   APPFORGE_PORT="$PORT" nohup python server.py > state/server.log 2>&1 < /dev/null &
   echo $! > state/server.pid
   ready=0
   for _ in $(seq 1 30); do
-    if curl --silent --fail --max-time 2 http://127.0.0.1:8787/api/health >/dev/null 2>&1; then
+    if curl --silent --fail --max-time 2 "${BASE_URL}/api/health" >/dev/null 2>&1; then
       ready=1
       break
     fi
