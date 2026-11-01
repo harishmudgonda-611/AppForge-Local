@@ -476,6 +476,12 @@ class AppForgeAdvancedTests(unittest.TestCase):
                 self.assertEqual(config["webDir"], "dist")
                 self.assertEqual(result["apk_expected_path"], "android/app/build/outputs/apk/debug/app-debug.apk")
                 self.assertFalse((project / "android").exists())
+                if advanced.shutil.which("node"):
+                    check = advanced.subprocess.run(
+                        ["node", "--check", str(project / "tests" / "smoke.test.js")],
+                        capture_output=True, text=True, timeout=20
+                    )
+                    self.assertEqual(check.returncode, 0, check.stderr)
             finally:
                 advanced.WORKSPACE = old_workspace
 
