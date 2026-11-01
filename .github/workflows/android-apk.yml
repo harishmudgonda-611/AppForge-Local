@@ -106,6 +106,20 @@ jobs:
           echo "path=$APK" >> "$GITHUB_OUTPUT"
           sha256sum "$APK" | tee APK-SHA256.txt
 
+      - name: Install and launch APK on Android emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_2
+          script: |
+            set -euo pipefail
+            adb install -r "apps/\${{ steps.validate.outputs.app_slug }}/\${{ steps.apk.outputs.path }}"
+            adb shell am start -n com.appforge.androidsmoketest/.MainActivity
+            sleep 8
+            adb shell dumpsys activity activities | grep -F "com.appforge.androidsmoketest"
+
       - uses: actions/upload-artifact@v7
         with:
           name: appforge-${{ steps.validate.outputs.app_slug }}-debug-apk

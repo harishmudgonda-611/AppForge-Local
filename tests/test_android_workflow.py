@@ -43,6 +43,12 @@ class AndroidWorkflowContractTests(unittest.TestCase):
         self.assertIn("ACTUAL_ID", self.workflow)
         self.assertIn("APK-SHA256.txt", self.workflow)
 
+    def test_apk_is_installed_and_launched_in_android_emulator(self):
+        self.assertIn("reactivecircus/android-emulator-runner@v2", self.workflow)
+        self.assertIn("adb install -r", self.workflow)
+        self.assertIn("adb shell am start", self.workflow)
+        self.assertIn("dumpsys activity activities", self.workflow)
+
     def test_artifact_contains_apk_and_checksum(self):
         self.assertIn("app-debug.apk", self.workflow)
         self.assertIn("APK-SHA256.txt", self.workflow)
