@@ -183,6 +183,27 @@ class AppForgeHTTPTests(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertTrue(data["ok"])
 
+    def test_browser_script_selectors_match_real_html_elements(self):
+        import re
+        html = (server.STATIC / "index.html").read_text(encoding="utf-8")
+        script = (server.STATIC / "app.js").read_text(encoding="utf-8")
+        element_ids = set(re.findall(r'\\bid=["\\']([^"\\']+)["\\']', html))
+        selectors = set(re.findall(r"\\$\\(['\\"]#([^'\\"]+)['\\"]\\)", script))
+        self.assertTrue(selectors)
+        self.assertEqual(selectors - element_ids, set())
+
+    def test_service_worker_precache_assets_exist(self):
+        import re
+        worker = (server.STATIC / "sw.js").read_text(encoding="utf-8")
+        match = re.search(r"const CACHE_FILES?=\\[(.*?)\\]", worker)
+        self.assertIsNotNone(match, "Service worker cache list must be discoverable")
+        paths = re.findall(r"['\\"]([^'\\"]+)['\\"]", match.group(1))
+        self.assertTrue(paths)
+        for path in paths:
+            if path == "/":
+                continue
+            self.assertTrue((server.STATIC / path.lstrip("/")).is_file(), path)
+
     def test_home_page_is_served(self):
         with urllib.request.urlopen(self.base_url + "/", timeout=3) as response:
             body = response.read().decode("utf-8")
