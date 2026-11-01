@@ -238,6 +238,23 @@ class AppForgeHTTPTests(unittest.TestCase):
         self.assertIsNone(error)
         self.assertEqual(normalized, files)
 
+    def test_safe_path_rejects_project_root_symlink_even_inside_workspace(self):
+        import tempfile
+        from pathlib import Path
+        original = server.WORKSPACE
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Path(tmp) / "workspace"
+            target = workspace / "RealProject"
+            target.mkdir(parents=True)
+            (target / "index.html").write_text("private")
+            (workspace / "AliasProject").symlink_to(target, target_is_directory=True)
+            server.WORKSPACE = workspace
+            try:
+                self.assertIsNone(server.Handler.safe_path(None, "AliasProject"))
+                self.assertEqual(server.Handler.safe_path(None, "RealProject"), target)
+            finally:
+                server.WORKSPACE = original
+
     def test_settings_reject_remote_model_endpoint(self):
         status, data = self.post_json(
             "/api/config",
