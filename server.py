@@ -327,14 +327,25 @@ class Handler(SimpleHTTPRequestHandler):
                 build_env.update({'CI':'true','npm_config_audit':'false','npm_config_fund':'false',
                                   'GIT_TERMINAL_PROMPT':'0'})
                 try:
+                    lockfile=project/'package-lock.json'
+                    install_cmd=['npm','ci','--no-audit','--no-fund'] if lockfile.is_file() and not lockfile.is_symlink() else ['npm','install','--no-audit','--no-fund']
+                    install=subprocess.run(install_cmd,cwd=project,env=build_env,stdin=subprocess.DEVNULL,
+                                           capture_output=True,text=True,timeout=300)
+                    if install.returncode:
+                        return self.send_json({'ok':False,'stage':'npm-install','stdout':install.stdout[-6000:],'stderr':install.stderr[-6000:]},500)
                     proc=subprocess.run(['npm','run','build'],cwd=project,env=build_env,
                                         stdin=subprocess.DEVNULL,capture_output=True,text=True,timeout=300)
                     if proc.returncode: return self.send_json({'ok':False,'stage':'web-build','stdout':proc.stdout[-6000:],'stderr':proc.stderr[-6000:]},500)
+                    if not android_dir.exists():
+                        add=subprocess.run(['npx','--no-install','cap','add','android'],cwd=project,env=build_env,
+                                            stdin=subprocess.DEVNULL,capture_output=True,text=True,timeout=300)
+                        if add.returncode:
+                            return self.send_json({'ok':False,'stage':'capacitor-add','stdout':add.stdout[-6000:],'stderr':add.stderr[-6000:]},500)
                     proc2=subprocess.run(['npx','--no-install','cap','sync','android'],cwd=project,env=build_env,
                                          stdin=subprocess.DEVNULL,capture_output=True,text=True,timeout=300)
                     if proc2.returncode: return self.send_json({'ok':False,'stage':'capacitor-sync','stdout':proc2.stdout[-6000:],'stderr':proc2.stderr[-6000:]},500)
-                    if not wrapper.is_file() or wrapper.resolve().parent != android_dir.resolve():
-                        return self.send_json({'ok':False,'stage':'gradle','error':'A project-local Gradle wrapper is required.'},400)
+                    if wrapper.is_symlink() or not wrapper.is_file() or wrapper.resolve().parent != android_dir.resolve():
+                        return self.send_json({'ok':False,'stage':'gradle','error':'A real project-local Gradle wrapper is required.'},400)
                     proc3=subprocess.run(['./gradlew','--no-daemon','--no-watch-fs','assembleDebug'],
                                          cwd=android_dir,env=build_env,stdin=subprocess.DEVNULL,
                                          capture_output=True,text=True,timeout=600)
