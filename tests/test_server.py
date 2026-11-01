@@ -269,6 +269,51 @@ class AppForgeHTTPTests(unittest.TestCase):
         self.assertIsNone(server.Handler.safe_path(None, 123))
         self.assertIsNone(server.Handler.safe_path(None, "Demo", 123))
 
+    def test_apk_download_serves_only_verified_project_artifact(self):
+        import tempfile
+        from pathlib import Path
+        original = server.WORKSPACE
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Path(tmp)
+            apk = workspace / "Demo/android/app/build/outputs/apk/debug/app-debug.apk"
+            apk.parent.mkdir(parents=True)
+            apk.write_bytes(b"test-apk-bytes")
+            server.WORKSPACE = workspace
+            try:
+                with urllib.request.urlopen(self.base_url + "/api/apk?project=Demo", timeout=3) as response:
+                    self.assertEqual(response.status, 200)
+                    self.assertEqual(response.headers.get("Content-Type"), "application/vnd.android.package-archive")
+                    self.assertEqual(response.read(), b"test-apk-bytes")
+                apk.unlink()
+                status, data = self.get_json("/api/health")
+                self.assertEqual(status, 200)
+                with self.assertRaises(urllib.error.HTTPError) as missing:
+                    urllib.request.urlopen(self.base_url + "/api/apk?project=Demo", timeout=3)
+                self.assertEqual(missing.exception.code, 404)
+            finally:
+                server.WORKSPACE = original
+
+    def test_apk_download_rejects_symlinked_artifact(self):
+        import tempfile
+        from pathlib import Path
+        original = server.WORKSPACE
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            project = root / "Demo"
+            artifact_dir = project / "android/app/build/outputs/apk/debug"
+            artifact_dir.mkdir(parents=True)
+            outside = root / "outside.apk"
+            outside.write_bytes(b"private")
+            (artifact_dir / "app-debug.apk").symlink_to(outside)
+            server.WORKSPACE = root
+            try:
+                with self.assertRaises(urllib.error.HTTPError) as error:
+                    urllib.request.urlopen(self.base_url + "/api/apk?project=Demo", timeout=3)
+                self.assertEqual(error.exception.code, 404)
+                self.assertEqual(outside.read_bytes(), b"private")
+            finally:
+                server.WORKSPACE = original
+
     def test_settings_reject_remote_model_endpoint(self):
         status, data = self.post_json(
             "/api/config",
