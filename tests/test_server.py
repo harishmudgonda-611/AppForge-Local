@@ -314,6 +314,54 @@ class AppForgeHTTPTests(unittest.TestCase):
             finally:
                 server.WORKSPACE = original
 
+    def test_generate_endpoint_rejects_symlinked_project_slug(self):
+        import tempfile
+        from pathlib import Path
+        original = server.WORKSPACE
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Path(tmp)
+            target = workspace / "outside"
+            target.mkdir()
+            (target / "keep.txt").write_text("untouched")
+            (workspace / "Alias").symlink_to(target, target_is_directory=True)
+            server.WORKSPACE = workspace
+            try:
+                status, data = self.post_json("/api/generate", {
+                    "slug": "Alias",
+                    "brief": "Build a useful offline-first application for testing."
+                })
+                self.assertEqual(status, 409)
+                self.assertEqual((target / "keep.txt").read_text(), "untouched")
+            finally:
+                server.WORKSPACE = original
+
+    def test_generate_endpoint_uses_unique_name_without_overwriting_existing_project(self):
+        import tempfile
+        from pathlib import Path
+        from unittest.mock import patch
+        original = server.WORKSPACE
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Path(tmp)
+            existing = workspace / "AlreadyThere"
+            existing.mkdir()
+            (existing / "keep.txt").write_text("preserve")
+            server.WORKSPACE = workspace
+            generated = {"files": {"index.html": "<html>new</html>"}}
+            def fake_llm(self, system, user, raw=False):
+                return {"ok": True, "data": generated, "text": "{}"}
+            try:
+                with patch.object(server.Handler, "call_llm", fake_llm):
+                    status, data = self.post_json("/api/generate", {
+                        "slug": "AlreadyThere",
+                        "brief": "Build a useful offline-first application for testing."
+                    })
+                self.assertEqual(status, 200, data)
+                self.assertNotEqual(data["project"], "AlreadyThere")
+                self.assertEqual((existing / "keep.txt").read_text(), "preserve")
+                self.assertTrue((workspace / data["project"] / "index.html").is_file())
+            finally:
+                server.WORKSPACE = original
+
     def test_generate_endpoint_writes_only_validated_pwa_files(self):
         import tempfile
         from pathlib import Path
