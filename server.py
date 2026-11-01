@@ -29,6 +29,34 @@ def local_endpoint_allowed(value):
     except Exception:
         return False
 
+def validate_generated_files(files):
+    """Validate a model-generated PWA file map before writing anything to disk."""
+    if not isinstance(files, dict) or not files:
+        return None, 'The model did not provide any project files.'
+    if len(files) > 80:
+        return None, 'The model returned too many files (maximum 80).'
+    normalized = {}
+    total = 0
+    for rel, content in files.items():
+        if not isinstance(rel, str) or not rel or len(rel) > 160 or "\\\\" in rel:
+            return None, 'Generated file paths must be short, relative POSIX paths.'
+        path = Path(rel)
+        if path.is_absolute() or any(part in ('', '.', '..') for part in path.parts):
+            return None, 'Generated file paths cannot be absolute or contain traversal segments.'
+        if not isinstance(content, str):
+            return None, f'Generated file {rel} must contain text.'
+        size = len(content.encode('utf-8'))
+        if size > 512_000:
+            return None, f'Generated file {rel} exceeds the 512 KB limit.'
+        total += size
+        if total > 2_000_000:
+            return None, 'Generated project exceeds the 2 MB total source limit.'
+        normalized[rel] = content
+    if 'index.html' not in normalized or not normalized['index.html'].strip():
+        return None, 'Generated project must include a non-empty index.html entry point.'
+    return normalized, None
+
+
 def validate_config_update(current, updates):
     """Return a validated config copy; never persist partially invalid settings."""
     if not isinstance(updates, dict):
@@ -241,13 +269,28 @@ class Handler(SimpleHTTPRequestHandler):
             if not isinstance(obj,dict) or not isinstance(obj.get('files'),dict):
                 (project/'generation-response.txt').write_text(result.get('text',''))
                 return self.send_json({'ok':False,'error':'Model response was not valid structured JSON. Raw response saved. Try a stronger model or shorter brief.','project':name,'raw':result.get('text','')},502)
+            files, file_error = validate_generated_files(obj.get('files'))
+            if file_error:
+                for child in project.iterdir():
+                    if child.is_file() or child.is_symlink(): child.unlink()
+                    elif child.is_dir(): import shutil; shutil.rmtree(child)
+                project.rmdir()
+                return self.send_json({'ok':False,'error':file_error,'project':name},422)
             written=[]
-            for rel,content in obj['files'].items():
-                if not isinstance(rel,str) or Path(rel).is_absolute() or '..' in Path(rel).parts or len(rel)>120: continue
-                target=(project/rel).resolve()
-                if project.resolve() not in target.parents: continue
-                target.parent.mkdir(parents=True,exist_ok=True); target.write_text(str(content)); written.append(rel)
-            meta={'slug':name,'brief':brief,'created_at':int(time.time()),'app_name':obj.get('app_name',name),'description':obj.get('description',''),'build_notes':obj.get('build_notes',''),'tests':obj.get('tests',''),'files':written}
+            for rel,content in files.items():
+                target=project/rel
+                target.parent.mkdir(parents=True,exist_ok=True)
+                # New generation folders must never contain pre-existing symlink parents.
+                current=project
+                for part in Path(rel).parts[:-1]:
+                    current=current/part
+                    if current.is_symlink():
+                        return self.send_json({'ok':False,'error':'Refusing to write through a symlinked generated-file directory.','project':name},409)
+                if target.is_symlink() or target.exists():
+                    return self.send_json({'ok':False,'error':'Refusing to overwrite an unexpected generated-file path.','project':name},409)
+                target.write_text(content,encoding='utf-8')
+                written.append(rel)
+            meta={'slug':name,'brief':brief,'created_at':int(time.time()),'app_name':str(obj.get('app_name',name))[:120],'description':str(obj.get('description',''))[:2000],'build_notes':str(obj.get('build_notes',''))[:6000],'tests':str(obj.get('tests',''))[:6000],'files':written}
             (project/'appforge-project.json').write_text(json.dumps(meta,indent=2))
             return self.send_json({'ok':True,'project':name,'app_name':meta['app_name'],'description':meta['description'],'files':written,'build_notes':meta['build_notes'],'tests':meta['tests']})
         if self.path=='/api/build':
