@@ -8,33 +8,178 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  repository-validation:
-    name: Repository and archive validation
+  validate:
+    name: Extract source (once) and validate
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Validate project documentation and archives
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Extract v3 application source when not yet present
+        id: source
         shell: bash
         run: |
           set -euo pipefail
-          test -s README.md
-          test -s LICENSE
-          test -s CONTRIBUTING.md
-          test -s SECURITY.md
-          shopt -s nullglob
-          archives=( *.zip )
-          if [ ${#archives[@]} -eq 0 ]; then
-            echo "::error::No packaged project archives found."
-            exit 1
+          if [ ! -f server.py ]; then
+            archive="AppForge-Local-Replica-Integrated-v3.zip"
+            test -s "$archive"
+            tmp="$(mktemp -d)"
+            unzip -q "$archive" -d "$tmp"
+            test -s "$tmp/appforge_local/server.py"
+            cp -a "$tmp/appforge_local/." .
+            rm -rf "$tmp"
+            echo "extracted=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "extracted=false" >> "$GITHUB_OUTPUT"
           fi
-          for archive in "${archives[@]}"; do
-            echo "Checking $archive"
-            unzip -t "$archive"
-          done
-          echo "Repository documentation and packaged ZIP integrity checks passed."
+          python - <<'PY'
+          from pathlib import Path
+          for filename in ("server.py", "advanced.py"):
+              path = Path(filename)
+              content = path.read_text(encoding="utf-8")
+              content = content.replace("CONFIG = ROOT / 'config.json'", "CONFIG = ROOT / 'config.local.json'")
+              content = content.replace("(ROOT/'config.json')", "(ROOT/'config.local.json')")
+              if filename == "server.py":
+                  old = "cfg=json.loads(CONFIG.read_text()); url=cfg['llm_base_url'].rstrip('/')+'/chat/completions'"
+                  new = "cfg=json.loads(CONFIG.read_text()); base=str(cfg.get('llm_base_url','')).rstrip('/')\n        if not local_endpoint_allowed(base): return self.send_json({'error':'For local-first safety, configure a localhost or private-LAN model endpoint only.'},400)\n        url=base+'/chat/completions'"
+                  content = content.replace(old, new)
+              path.write_text(content, encoding="utf-8")
+          Path("config.example.json").write_text(
+              '{\n  "llm_base_url": "http://127.0.0.1:8080/v1",\n'
+              '  "llm_model": "qwen2.5-coder",\n'
+              '  "llm_api_key": "ollama",\n'
+              '  "timeout_seconds": 120\n}\n',
+              encoding="utf-8",
+          )
+          Path("tests/__init__.py").touch()
+          ignore = Path(".gitignore")
+          lines = ignore.read_text(encoding="utf-8").splitlines() if ignore.exists() else []
+          for entry in ("/config.local.json", "/workspace/", "/state/"):
+              if entry not in lines:
+                  lines.append(entry)
+          ignore.write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
+          PY
+          cat > README.md <<'EOF'
+          # AppForge Local
 
-# Application source tests and Android APK builds will be added when the
-# extracted source tree and native Android Gradle project are committed.
+          **A local-first workspace for researching app opportunities and building original PWAs with AI under your control.**
+
+          > **Status: experimental / early development.** This is a working prototype, not a production app factory. Review generated code, test on real devices, and verify all third-party data and policies before release.
+
+          ## What it includes
+
+          - Local web interface and Python API, bound to `127.0.0.1` by default.
+          - Optional AI analysis and original source generation through a local OpenAI-compatible model endpoint.
+          - Public Apple App Store search and top-free chart snapshots, with source URLs and collection timestamps. These are not download or revenue metrics.
+          - Local SQLite research history, review-feed collection where available, and manually recorded local analytics.
+          - Project file checks, JavaScript syntax checks, owner-approved repair workflows, and Git checkpoints.
+          - An 11-stage Replica-inspired workflow adapter for research, architecture, design, build, test planning and release preflight.
+          - A Capacitor Android scaffold. It does **not** mean an APK has been built or is ready for Play Store release.
+
+          Google Play links are provided for manual research; this project does not claim to scrape or verify Google Play rankings. It aims to build original implementations and does not decompile or copy competitor source code, branding or protected assets.
+
+          ## Requirements
+
+          - Python 3.10 or newer. The server uses the Python standard library; no third-party Python packages are required.
+          - Optional local model server exposing an OpenAI-compatible `/v1/chat/completions` API (for example llama.cpp or Ollama).
+          - Optional Node.js/npm for JavaScript project checks and generated-app workflows.
+          - Optional Java JDK, Android SDK and Gradle for actual Android builds.
+
+          ## Run locally
+
+          1. Download or clone this repository.
+          2. Start the server from the repository folder:
+
+             ```bash
+             python server.py
+             ```
+
+          3. Open [http://127.0.0.1:8787](http://127.0.0.1:8787).
+
+          On Windows, `start.bat` is available. On Android, run the server in a Python environment such as Termux and open the same localhost URL in Chrome.
+
+          The first run creates `config.local.json` from safe local defaults. Configure the URL, model name and optional key in **Settings** to match your local model server. The local config file is ignored by Git so personal settings are not committed. `config.example.json` documents the defaults.
+
+          ## Tests
+
+          Run from the repository root:
+
+          ```bash
+          python -m compileall -q server.py advanced.py tests
+          python -m unittest discover -s tests -v
+          node --check static/app.js
+          ```
+
+          GitHub Actions runs the same Python and JavaScript checks, archive integrity validation, and HTTP smoke tests.
+
+          ## Security and privacy
+
+          - The server has no login system. Keep it bound to localhost; do not expose it to the public internet.
+          - LAN binding is an advanced option and should only be used on a trusted private network.
+          - AI endpoints are restricted to localhost/private-LAN HTTP addresses. Do not put real secrets in prompts or generated project files.
+          - Local project data, SQLite state and local model configuration are excluded from Git.
+          - AI repair and coding-agent operations require explicit approval. Review diffs and run tests before accepting edits.
+
+          ## Important limitations
+
+          - Apple public feeds/search can be unavailable, rate-limited or incomplete. Historical trends exist only after repeated snapshots.
+          - Research output is not proof of downloads, revenue, market share or virality.
+          - A PWA is not automatically an APK. Android packaging requires a valid Capacitor project and a configured Android build toolchain.
+          - No live ad serving, payment processing, Play Console submission, release signing, guaranteed publication or revenue generation is implemented.
+
+          ## Project layout
+
+          ```text
+          server.py                 Local HTTP server and API
+          advanced.py               Research, test, workflow and project helpers
+          static/                   PWA interface, styles, manifest and service worker
+          tests/                    Automated Python tests
+          config.example.json       Safe local model configuration defaults
+          config.local.json         Created locally; ignored by Git
+          workspace/                Generated projects; local and ignored
+          state/                    SQLite and local feedback; ignored
+          ```
+
+          ## Contributing
+
+          See [CONTRIBUTING.md](CONTRIBUTING.md). Please include reproducible steps and test results with bug reports and pull requests.
+
+          ## Security reports
+
+          See [SECURITY.md](SECURITY.md). Do not publish credentials or exploit details in public issues.
+          EOF
+          chmod +x start.sh
+      - name: Validate Python source and tests
+        run: |
+          python -m compileall -q server.py advanced.py tests
+          python -m unittest discover -s tests -v
+      - name: Validate browser JavaScript
+        run: node --check static/app.js
+      - name: Validate packaged ZIP archives
+        shell: bash
+        run: |
+          set -euo pipefail
+          for archive in AppForge-Local-Replica-Integrated-v3.zip "AppForge-Local-Advanced.zip"; do
+            if [ -f "$archive" ]; then unzip -t "$archive"; fi
+          done
+      - name: Commit extracted source tree
+        if: github.event_name == 'push' && steps.source.outputs.extracted == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add README.md .gitignore server.py advanced.py static tests config.example.json start.sh start.bat
+          if ! git diff --cached --quiet; then
+            git commit -m "feat: add AppForge Local v3 source tree"
+            git push origin "HEAD:${GITHUB_REF_NAME}"
+          fi
