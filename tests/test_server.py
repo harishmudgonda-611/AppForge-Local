@@ -268,6 +268,16 @@ class AppForgeHTTPTests(unittest.TestCase):
         with urllib.request.urlopen(request, timeout=3) as response:
             self.assertEqual(response.status, 200)
 
+    def test_research_api_returns_400_for_invalid_storefront_region(self):
+        try:
+            urllib.request.urlopen(self.base_url + "/api/research/search?term=calculator&region=../../", timeout=3)
+        except urllib.error.HTTPError as error:
+            self.assertEqual(error.code, 400)
+            data = json.loads(error.read().decode("utf-8"))
+            self.assertIn("two-letter", data["error"])
+        else:
+            self.fail("Invalid storefront region should return HTTP 400")
+
     def test_health_endpoint(self):
         status, data = self.get_json("/api/health")
         self.assertEqual(status, 200)
