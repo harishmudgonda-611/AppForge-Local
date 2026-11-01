@@ -36,7 +36,7 @@ Google Play links are provided for manual research; this project does not claim 
 
 On Windows, `start.bat` is available. On Android, run the server in a Python environment such as Termux and open the same localhost URL in Chrome.
 
-The first run creates `config.local.json` from safe local defaults. Configure the URL, model name and optional key in **Settings** to match your local model server. The local config file is ignored by Git so personal settings are not committed. `config.example.json` documents the defaults.
+The first run creates `config.local.json` from safe local defaults. Configure the URL and model name in **Settings** to match your local model server. The API key is optional: leave it blank for local servers that do not require authentication; AppForge omits the Authorization header when no key is set. The local config file is ignored by Git so personal settings are not committed. `config.example.json` documents the defaults.
 
 ## Tests
 
