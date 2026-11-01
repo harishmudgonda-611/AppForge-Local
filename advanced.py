@@ -9,6 +9,23 @@ DB = STATE / 'appforge.db'
 WORKSPACE = ROOT / 'workspace'; WORKSPACE.mkdir(exist_ok=True)
 
 
+def local_endpoint_allowed(value):
+    """Allow only plain-HTTP loopback or private-network model endpoints."""
+    import ipaddress
+    from urllib.parse import urlparse
+    try:
+        parsed = urlparse(str(value))
+        if parsed.scheme != "http" or not parsed.hostname:
+            return False
+        host = parsed.hostname.lower().rstrip(".")
+        if host == "localhost":
+            return True
+        address = ipaddress.ip_address(host)
+        return bool(address.is_loopback or address.is_private or address.is_link_local)
+    except Exception:
+        return False
+
+
 
 # AppForge-native workflow adapter based on the publicly documented Replica Skill stages.
 # The upstream skill pack is referenced, not vendored into this project.
@@ -310,6 +327,8 @@ def run_aider(project_name, prompt, approved=False):
     if p.parent!=WORKSPACE.resolve() or not p.is_dir(): raise ValueError('Project not found')
     if not isinstance(prompt,str) or len(prompt.strip())<10 or len(prompt)>4000: raise ValueError('Provide a focused change request between 10 and 4000 characters')
     cfg=json.loads((ROOT/'config.local.json').read_text())
+    if not local_endpoint_allowed(cfg.get('llm_base_url', '')):
+        return {'ok':False,'installed':True,'error':'Local-first policy: Aider can only use localhost or a private-LAN model endpoint.'}
     # A checkpoint must succeed before allowing a coding agent to edit anything.
     cp=git_action(project_name,'checkpoint')
     if not cp.get('ok'): return {'ok':False,'error':'Git checkpoint failed; refusing to run coding agent.','checkpoint':cp}
@@ -345,6 +364,8 @@ def repair_project(project_name, approved=False):
     checkpoint=git_action(project_name,'checkpoint')
     if not checkpoint.get('ok'): return {'ok':False,'error':'Could not create Git checkpoint; no files changed.','checkpoint':checkpoint,'before':first}
     cfg=json.loads((ROOT/'config.local.json').read_text())
+    if not local_endpoint_allowed(cfg.get('llm_base_url', '')):
+        return {'ok':False,'error':'Local-first policy: repair requires a localhost or private-LAN model endpoint.','before':first}
     candidates=[]
     for rel in first.get('failures',[]):
         m=re.match(r'(?:Invalid JSON |JS syntax failed )([^:]+):',rel)
