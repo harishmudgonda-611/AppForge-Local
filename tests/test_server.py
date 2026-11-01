@@ -232,6 +232,10 @@ class AppForgeHTTPTests(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertTrue(data["ok"])
 
+    def test_browser_script_avoids_inline_event_handlers(self):
+        script = (server.STATIC / "app.js").read_text(encoding="utf-8")
+        self.assertNotIn("onerror=", script.lower())
+
     def test_browser_script_selectors_match_real_html_elements(self):
         import re
         html = (server.STATIC / "index.html").read_text(encoding="utf-8")
@@ -258,6 +262,9 @@ class AppForgeHTTPTests(unittest.TestCase):
             body = response.read().decode("utf-8")
             self.assertEqual(response.status, 200)
             self.assertIn("AppForge", body)
+            self.assertEqual(response.headers.get("X-Content-Type-Options"), "nosniff")
+            self.assertEqual(response.headers.get("X-Frame-Options"), "DENY")
+            self.assertIn("default-src 'self'", response.headers.get("Content-Security-Policy", ""))
 
     def test_get_rejects_non_loopback_host_header(self):
         request = urllib.request.Request(self.base_url + "/api/health", headers={"Host": "attacker.example"})
