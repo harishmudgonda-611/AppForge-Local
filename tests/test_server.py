@@ -108,7 +108,45 @@ class AppForgeHTTPTests(unittest.TestCase):
             {"llm_base_url": "https://example.com/v1"},
         )
         self.assertEqual(status, 400)
-        self.assertIn("local-first", data["error"])
+        self.assertIn("localhost or private-LAN", data["error"])
+
+    def test_local_endpoint_rejects_embedded_credentials_and_query(self):
+        self.assertFalse(server.local_endpoint_allowed("http://user:pass@127.0.0.1:8080/v1"))
+        self.assertFalse(server.local_endpoint_allowed("http://127.0.0.1:8080/v1?token=secret"))
+        self.assertFalse(server.local_endpoint_allowed("http://127.0.0.1:8080/v1#fragment"))
+
+    def test_config_rejects_invalid_timeout_types_and_bounds(self):
+        current=dict(server.DEFAULT_CONFIG)
+        for value in (True, "120", 4, 601, 1.5):
+            cfg,error=server.validate_config_update(current, {"timeout_seconds": value})
+            self.assertIsNone(cfg)
+            self.assertIn("between 5 and 600", error)
+
+    def test_config_rejects_empty_or_oversized_model_name(self):
+        current=dict(server.DEFAULT_CONFIG)
+        for value in (" ", "m" * 201, 123):
+            cfg,error=server.validate_config_update(current, {"llm_model": value})
+            self.assertIsNone(cfg)
+            self.assertIn("Model name", error)
+
+    def test_config_rejects_non_text_or_oversized_api_key(self):
+        current=dict(server.DEFAULT_CONFIG)
+        for value in (None, 123, "k" * 1001):
+            cfg,error=server.validate_config_update(current, {"llm_api_key": value})
+            self.assertIsNone(cfg)
+            self.assertIn("API key", error)
+
+    def test_config_accepts_valid_local_settings_and_normalizes_url(self):
+        current=dict(server.DEFAULT_CONFIG)
+        cfg,error=server.validate_config_update(current, {
+            "llm_base_url": "http://127.0.0.1:8080/v1/",
+            "llm_model": " qwen-local ",
+            "timeout_seconds": 300,
+        })
+        self.assertIsNone(error)
+        self.assertEqual(cfg["llm_base_url"], "http://127.0.0.1:8080/v1")
+        self.assertEqual(cfg["llm_model"], "qwen-local")
+        self.assertEqual(cfg["timeout_seconds"], 300)
 
     def test_model_calls_reject_remote_endpoint_even_if_config_is_edited(self):
         original = server.CONFIG.read_text(encoding="utf-8")
