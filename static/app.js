@@ -1,4 +1,4 @@
-const $=s=>document.querySelector(s), $=s=>[...document.querySelectorAll(s)];let toastTimer;
+const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];let toastTimer;
 document.addEventListener('error',e=>{if(e.target instanceof HTMLImageElement&&e.target.closest('#trend-grid'))e.target.style.visibility='hidden'},true);
 function toast(s){const el=$('#toast');el.textContent=s;el.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>el.classList.remove('show'),4200)}
 async function api(path,body){const r=await fetch(path,body?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}:{});const d=await r.json();if(!r.ok)throw new Error(d.error||'Request failed');return d}
