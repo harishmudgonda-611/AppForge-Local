@@ -1,0 +1,87 @@
+name: Build Android APK
+
+on:
+  workflow_dispatch:
+    inputs:
+      app_slug:
+        description: "Committed PWA folder under apps/ (for example my-first-app)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  android-debug:
+    name: Build and verify debug APK
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate app slug
+        shell: bash
+        env:
+          APP_SLUG: ${{ inputs.app_slug }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$APP_SLUG" =~ ^[A-Za-z0-9][A-Za-z0-9_-]{0,48}$ ]]; then
+            echo "Invalid app slug. Use letters, numbers, underscore or hyphen."
+            exit 1
+          fi
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: apps/${{ inputs.app_slug }}/package-lock.json
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install app dependencies and validate
+        working-directory: apps/${{ inputs.app_slug }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s package.json
+          test -s capacitor.config.json
+          test -s index.html
+          if [ -f package-lock.json ]; then npm ci; else npm install; fi
+          npm test --if-present
+          npm run build
+          test -s dist/index.html
+
+      - name: Create Android project and sync Capacitor
+        working-directory: apps/${{ inputs.app_slug }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -d android ]; then npx cap add android; fi
+          npx cap sync android
+          test -x android/gradlew
+
+      - name: Build debug APK
+        working-directory: apps/${{ inputs.app_slug }}/android
+        run: ./gradlew --no-daemon assembleDebug
+
+      - name: Verify APK exists
+        id: apk
+        working-directory: apps/${{ inputs.app_slug }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK="android/app/build/outputs/apk/debug/app-debug.apk"
+          test -s "$APK"
+          echo "path=$APK" >> "$GITHUB_OUTPUT"
+          sha256sum "$APK"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: appforge-${{ inputs.app_slug }}-debug-apk
+          path: apps/${{ inputs.app_slug }}/${{ steps.apk.outputs.path }}
+          if-no-files-found: error
+          retention-days: 7
