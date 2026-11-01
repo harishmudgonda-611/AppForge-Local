@@ -4,6 +4,12 @@ from pathlib import Path
 import advanced
 
 class AppForgeAdvancedTests(unittest.TestCase):
+    def test_public_research_response_is_size_limited(self):
+        from io import BytesIO
+        with patch.object(advanced.urllib.request, "urlopen", return_value=BytesIO(b"x" * 5_000_001)):
+            with self.assertRaisesRegex(RuntimeError, "5 MB safety limit"):
+                advanced.request_json("https://example.invalid/feed", attempts=1)
+
     def test_repo_catalog_has_optional_adapter(self):
         d=advanced.repo_catalog(); self.assertTrue(any(x['name']=='Aider' for x in d['repositories']))
     def test_launch_config_checklist(self):
