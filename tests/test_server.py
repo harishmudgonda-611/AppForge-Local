@@ -248,6 +248,8 @@ class AppForgeHTTPTests(unittest.TestCase):
     def test_service_worker_precache_assets_exist(self):
         import re
         worker = (server.STATIC / "sw.js").read_text(encoding="utf-8")
+        self.assertRegex(worker, r"const CACHE='appforge-local-v[0-9]+'")
+        self.assertIn("keys.filter(k=>k!==CACHE)", worker)
         match = re.search(r"const FILES=\[(.*?)\]", worker)
         self.assertIsNotNone(match, "Service worker cache list must be discoverable")
         paths = re.findall(r"'([^']+)'", match.group(1))
