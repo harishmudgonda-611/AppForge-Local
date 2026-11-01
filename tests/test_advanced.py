@@ -26,6 +26,14 @@ class AppForgeAdvancedTests(unittest.TestCase):
             finally:
                 advanced.DB = old
 
+    def test_public_storefront_inputs_are_validated(self):
+        self.assertEqual(advanced.region_code("IN"), "in")
+        for region in ("../us", "https://example.com", "USA", 123):
+            with self.assertRaisesRegex(ValueError, "two-letter"):
+                advanced.region_code(region)
+        with self.assertRaisesRegex(ValueError, "numeric identifier"):
+            advanced.reviews("../1", "us")
+
     def test_repo_catalog_has_optional_adapter(self):
         d=advanced.repo_catalog(); self.assertTrue(any(x['name']=='Aider' for x in d['repositories']))
     def test_launch_config_checklist(self):
