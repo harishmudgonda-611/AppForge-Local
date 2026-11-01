@@ -1,5 +1,7 @@
 """HTTP smoke tests for the local AppForge server."""
 import json
+from io import BytesIO
+from email.message import Message
 import threading
 import unittest
 import urllib.error
@@ -39,6 +41,30 @@ class AppForgeHTTPTests(unittest.TestCase):
                 return response.status, json.loads(response.read().decode("utf-8"))
         except urllib.error.HTTPError as error:
             return error.code, json.loads(error.read().decode("utf-8"))
+
+    def test_request_body_rejects_negative_content_length(self):
+        handler = object.__new__(server.Handler)
+        handler.headers = Message()
+        handler.headers["Content-Length"] = "-1"
+        handler.rfile = BytesIO(b"")
+        with self.assertRaisesRegex(ValueError, "Invalid Content-Length"):
+            handler.body()
+
+    def test_request_body_requires_json_object(self):
+        handler = object.__new__(server.Handler)
+        handler.headers = Message()
+        handler.headers["Content-Length"] = "2"
+        handler.rfile = BytesIO(b"[]")
+        with self.assertRaisesRegex(ValueError, "JSON object"):
+            handler.body()
+
+    def test_request_body_rejects_oversized_content_length(self):
+        handler = object.__new__(server.Handler)
+        handler.headers = Message()
+        handler.headers["Content-Length"] = "2000001"
+        handler.rfile = BytesIO(b"")
+        with self.assertRaisesRegex(ValueError, "too large"):
+            handler.body()
 
     def test_home_page_is_served(self):
         with urllib.request.urlopen(self.base_url + "/", timeout=3) as response:
