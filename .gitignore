@@ -1,0 +1,34 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.venv/
+venv/
+.env
+.env.*
+
+# Node
+node_modules/
+npm-debug.log*
+pnpm-debug.log*
+
+# Build outputs
+dist/
+build/
+*.apk
+*.aab
+.gradle/
+**/build/
+
+# Local application data
+data/
+storage/
+*.sqlite3
+*.db
+
+# Editor and OS files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
