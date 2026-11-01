@@ -21,6 +21,8 @@ def local_endpoint_allowed(value):
         parsed = urlparse(str(value))
         if parsed.scheme != "http" or not parsed.hostname:
             return False
+        if parsed.username is not None or parsed.password is not None or parsed.query or parsed.fragment:
+            return False
         host = parsed.hostname.lower().rstrip(".")
         if host == "localhost":
             return True
