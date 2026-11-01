@@ -363,7 +363,7 @@ def create_capacitor(project_name, app_name=None):
         "const assert=require('node:assert/strict');"
         "const fs=require('node:fs');"
         "test('web entry point exists',()=>assert.ok(fs.existsSync('index.html')));"
-        "test('app metadata exists',()=>assert.ok(fs.existsSync('appforge-project.json')));\\n"
+        "test('app metadata exists',()=>assert.ok(fs.existsSync('appforge-project.json')));\n"
     )
     return {
         'ok': True,
