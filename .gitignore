@@ -32,3 +32,6 @@ storage/
 Thumbs.db
 .idea/
 .vscode/
+/config.local.json
+/workspace/
+/state/

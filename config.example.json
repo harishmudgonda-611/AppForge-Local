@@ -1,0 +1,6 @@
+{
+  "llm_base_url": "http://127.0.0.1:8080/v1",
+  "llm_model": "qwen2.5-coder",
+  "llm_api_key": "ollama",
+  "timeout_seconds": 120
+}

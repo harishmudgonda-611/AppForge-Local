@@ -1,90 +1,87 @@
 # AppForge Local
 
-**Build and manage AI-assisted applications locally, with control over your models, files and workflow.**
+**A local-first workspace for researching app opportunities and building original PWAs with AI under your control.**
 
-AppForge Local is an experimental, local-first application-building workspace. Its goal is to help developers turn an app brief into a mobile-friendly Progressive Web App (PWA), inspect and iterate on projects, and keep model execution under the developer's control.
+> **Status: experimental / early development.** This is a working prototype, not a production app factory. Review generated code, test on real devices, and verify all third-party data and policies before release.
 
-> **Project status:** Early development / experimental. Features, setup steps and platform support may change. Review the current code and CI results before relying on this project.
+## What it includes
 
-## Why AppForge Local?
+- Local web interface and Python API, bound to `127.0.0.1` by default.
+- Optional AI analysis and original source generation through a local OpenAI-compatible model endpoint.
+- Public Apple App Store search and top-free chart snapshots, with source URLs and collection timestamps. These are not download or revenue metrics.
+- Local SQLite research history, review-feed collection where available, and manually recorded local analytics.
+- Project file checks, JavaScript syntax checks, owner-approved repair workflows, and Git checkpoints.
+- An 11-stage Replica-inspired workflow adapter for research, architecture, design, build, test planning and release preflight.
+- A Capacitor Android scaffold. It does **not** mean an APK has been built or is ready for Play Store release.
 
-- **Local-first:** designed to work with a locally hosted model endpoint rather than requiring a paid hosted AI API.
-- **PWA-oriented:** targets responsive, installable web applications.
-- **Developer-controlled:** keeps project files and iteration workflows under the developer's control.
-- **Extensible:** intended to grow through modular analysis, generation, testing and improvement workflows.
+Google Play links are provided for manual research; this project does not claim to scrape or verify Google Play rankings. It aims to build original implementations and does not decompile or copy competitor source code, branding or protected assets.
 
-Local-first does not mean every feature is guaranteed to work offline. Model inference requires a running local model server, and optional research or download workflows may require an internet connection.
+## Requirements
 
-## Repository contents
+- Python 3.10 or newer. The server uses the Python standard library; no third-party Python packages are required.
+- Optional local model server exposing an OpenAI-compatible `/v1/chat/completions` API (for example llama.cpp or Ollama).
+- Optional Node.js/npm for JavaScript project checks and generated-app workflows.
+- Optional Java JDK, Android SDK and Gradle for actual Android builds.
 
-The repository currently includes packaged project snapshots:
+## Run locally
 
-- [AppForge-Local-Advanced.zip](./AppForge-Local-Advanced.zip)
-- [AppForge-Local-Replica-Integrated-v3.zip](./AppForge-Local-Replica-Integrated-v3.zip)
+1. Download or clone this repository.
+2. Start the server from the repository folder:
 
-The source tree is not yet committed as ordinary browsable files at the repository root. The CI workflow expects the v3 archive to contain `appforge_local/server.py`, the related application modules, static assets and tests. It also checks for a native Android Gradle project before producing an APK. Until those files are present and the workflow passes, do not treat an APK build or release as verified.
+   ```bash
+   python server.py
+   ```
 
-## Getting started
+3. Open [http://127.0.0.1:8787](http://127.0.0.1:8787).
 
-1. Open the [v3 integrated archive](./AppForge-Local-Replica-Integrated-v3.zip) and inspect its contents.
-2. Extract it locally.
-3. Follow the setup instructions included in the extracted project, if present.
-4. Configure the model endpoint to point to a local inference server that you control.
-5. Start the application using the instructions shipped with that version.
-6. Review generated files and test them before using or distributing an app.
+On Windows, `start.bat` is available. On Android, run the server in a Python environment such as Termux and open the same localhost URL in Chrome.
 
-Because the archive layout and dependencies may change, use the README or setup script inside the exact archive version you download. Do not assume that older instructions apply to newer snapshots.
+The first run creates `config.local.json` from safe local defaults. Configure the URL, model name and optional key in **Settings** to match your local model server. The local config file is ignored by Git so personal settings are not committed. `config.example.json` documents the defaults.
 
-## Local model setup
+## Tests
 
-AppForge Local is intended to connect to a local model server exposing a compatible chat-completions API. Configure the endpoint in the application's documented settings or environment configuration. Keep it bound to loopback (for example, `127.0.0.1`) unless you understand and have secured the network exposure.
+Run from the repository root:
 
-Never expose an unauthenticated model server or development server to an untrusted network. Do not commit API keys, passwords, private model files or personal data.
-
-## Development and validation
-
-The GitHub Actions workflow in `.github/workflows/appforge-ci.yml` is intended to:
-
-- validate required application files;
-- compile Python and check JavaScript syntax;
-- run the Python unit test suite;
-- start the local server and exercise HTTP smoke tests;
-- build and verify a debug APK when a native Android Gradle project and wrapper are committed.
-
-A workflow definition is not proof that these checks currently pass. See the repository's [Actions](../../actions) tab for actual run results.
-
-## Project structure
-
-The intended source layout is:
-
-```text
-appforge_local/
-  server.py
-  advanced.py
-  static/
-    index.html
-    app.js
-    styles.css
-  tests/
-android/                 # optional native Android wrapper/project
-.github/
-  workflows/
+```bash
+python -m compileall -q server.py advanced.py tests
+python -m unittest discover -s tests -v
+node --check static/app.js
 ```
 
-This is the target layout expected by the current CI workflow; it is not a claim that all these paths are already committed.
+GitHub Actions runs the same Python and JavaScript checks, archive integrity validation, and HTTP smoke tests.
+
+## Security and privacy
+
+- The server has no login system. Keep it bound to localhost; do not expose it to the public internet.
+- LAN binding is an advanced option and should only be used on a trusted private network.
+- AI endpoints are restricted to localhost/private-LAN HTTP addresses. Do not put real secrets in prompts or generated project files.
+- Local project data, SQLite state and local model configuration are excluded from Git.
+- AI repair and coding-agent operations require explicit approval. Review diffs and run tests before accepting edits.
+
+## Important limitations
+
+- Apple public feeds/search can be unavailable, rate-limited or incomplete. Historical trends exist only after repeated snapshots.
+- Research output is not proof of downloads, revenue, market share or virality.
+- A PWA is not automatically an APK. Android packaging requires a valid Capacitor project and a configured Android build toolchain.
+- No live ad serving, payment processing, Play Console submission, release signing, guaranteed publication or revenue generation is implemented.
+
+## Project layout
+
+```text
+server.py                 Local HTTP server and API
+advanced.py               Research, test, workflow and project helpers
+static/                   PWA interface, styles, manifest and service worker
+tests/                    Automated Python tests
+config.example.json       Safe local model configuration defaults
+config.local.json         Created locally; ignored by Git
+workspace/                Generated projects; local and ignored
+state/                    SQLite and local feedback; ignored
+```
 
 ## Contributing
 
-Contributions, bug reports and documentation improvements are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request. Be clear about tested environments and include reproducible steps for bugs.
+See [CONTRIBUTING.md](CONTRIBUTING.md). Please include reproducible steps and test results with bug reports and pull requests.
 
-## Security
+## Security reports
 
-Please do not report exploitable vulnerabilities in public issues. See [SECURITY.md](SECURITY.md) for responsible disclosure guidance.
-
-## License
-
-This project is licensed under the MIT License. See [LICENSE](LICENSE).
-
-## Maintainer
-
-Maintained by [harishmudgonda-611](https://github.com/harishmudgonda-611).
+See [SECURITY.md](SECURITY.md). Do not publish credentials or exploit details in public issues.
