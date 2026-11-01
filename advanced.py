@@ -278,6 +278,16 @@ def create_capacitor(project_name, app_name=None):
         raise ValueError('Project not found')
     if not (p / 'index.html').is_file():
         raise ValueError('Project must contain index.html before preparing Android scaffold')
+    # Generated scaffold paths must be ordinary project-owned files/directories.
+    for rel in ('package.json', 'capacitor.config.json', 'tests'):
+        target=p/rel
+        if target.is_symlink():
+            raise ValueError(f'Refusing to write through symlinked scaffold path: {rel}')
+        if target.exists() and ((rel == 'tests' and not target.is_dir()) or (rel != 'tests' and not target.is_file())):
+            raise ValueError(f'Unexpected scaffold path type: {rel}')
+    tests_dir=p/'tests'
+    if tests_dir.exists() and (tests_dir/'smoke.test.js').is_symlink():
+        raise ValueError('Refusing to overwrite symlinked tests/smoke.test.js')
     label = (app_name or project_name).strip()[:80]
     if not label:
         raise ValueError('App name cannot be empty')
@@ -346,7 +356,7 @@ def test_project(project_name, repair=False, call_llm=None, run_npm_tests=False)
     for f in required:
         if not (p/f).is_file(): failures.append(f'Missing required file: {f}')
     for f in p.rglob('*.json'):
-        if any(x in f.parts for x in ('node_modules','.git','android')): continue
+        if f.is_symlink() or any(x in f.parts for x in ('node_modules','.git','android')): continue
         try: json.loads(f.read_text())
         except Exception as e: failures.append(f'Invalid JSON {f.relative_to(p)}: {e}')
     if run_npm_tests and (p/'package.json').exists() and shutil.which('npm'):
@@ -358,13 +368,20 @@ def test_project(project_name, repair=False, call_llm=None, run_npm_tests=False)
     # Syntax-check JavaScript using Node when available.
     if shutil.which('node'):
         for f in list(p.rglob('*.js'))[:100]:
-            if any(x in f.parts for x in ('node_modules','.git','android','dist')): continue
+            if f.is_symlink() or any(x in f.parts for x in ('node_modules','.git','android','dist')): continue
             try:
                 proc=subprocess.run(['node','--check',str(f)],capture_output=True,text=True,timeout=20)
                 if proc.returncode: failures.append(f'JS syntax failed {f.relative_to(p)}: {proc.stderr[-1000:]}')
             except Exception as e: failures.append(f'JS syntax check error: {e}')
     report={'project':project_name,'created_at':int(time.time()),'ok':not failures,'failures':failures,'logs':logs,'checks':['required files','JSON syntax','JavaScript syntax when Node exists'] + (['owner-approved npm test'] if run_npm_tests else []),'repair_mode':'proposal-only' if repair else 'disabled'}
-    out=p/'test-reports'; out.mkdir(exist_ok=True); (out/f'{report["created_at"]}.json').write_text(json.dumps(report,indent=2))
+    out=p/'test-reports'
+    if out.is_symlink() or (out.exists() and not out.is_dir()):
+        raise ValueError('Refusing to write test report through a symlink or non-directory path.')
+    out.mkdir(exist_ok=True)
+    report_path=out/f'{report["created_at"]}.json'
+    if report_path.is_symlink():
+        raise ValueError('Refusing to overwrite a symlinked test report.')
+    report_path.write_text(json.dumps(report,indent=2))
     return report
 
 def git_action(project_name, action):
@@ -462,10 +479,12 @@ def repair_project(project_name, approved=False):
         if m: candidates.append(m.group(1))
     # Include relevant project entry points, but never send node_modules/build output.
     for rel in ['index.html','app.js','styles.css','package.json','capacitor.config.json']:
-        if (p/rel).is_file() and rel not in candidates: candidates.append(rel)
+        if (p/rel).is_file() and not (p/rel).is_symlink() and rel not in candidates: candidates.append(rel)
     snippets={}
     for rel in candidates[:12]:
-        f=(p/rel).resolve()
+        source=p/rel
+        if source.is_symlink(): continue
+        f=source.resolve()
         if p not in f.parents or not f.is_file() or f.stat().st_size>100000: continue
         snippets[rel]=f.read_text(errors='replace')
     payload={'model':cfg['llm_model'],'messages':[{'role':'system','content':'You are a careful repair engineer. Return ONLY a JSON object {"files":{"existing/relative/path":"complete replacement content"},"explanation":"..."}. Fix only listed test failures. Do not add dependencies, network calls, credentials, obfuscation, or unrelated features. Only replace files included in the supplied files map. If unsure return an empty files object.'},{'role':'user','content':json.dumps({'failures':first['failures'],'files':snippets},ensure_ascii=False)[:24000]}],'temperature':0.1}
@@ -479,7 +498,9 @@ def repair_project(project_name, approved=False):
         applied=[]
         for rel,content in patch['files'].items():
             if rel not in snippets or not isinstance(content,str) or len(content)>200000: continue
-            target=(p/rel).resolve()
+            source=p/rel
+            if source.is_symlink(): continue
+            target=source.resolve()
             if p not in target.parents or not target.is_file(): continue
             target.write_text(content); applied.append(rel)
         if not applied: return {'ok':False,'error':'No safe existing-file changes were returned.','before':first,'explanation':patch.get('explanation','')}
