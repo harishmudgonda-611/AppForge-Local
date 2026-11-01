@@ -21,7 +21,7 @@ Google Play links are provided for manual research; this project does not claim 
 - Python 3.10 or newer. The server uses the Python standard library; no third-party Python packages are required.
 - Optional local model server exposing an OpenAI-compatible `/v1/chat/completions` API (for example llama.cpp or Ollama).
 - Optional Node.js 22+ / npm for JavaScript project checks and generated-app workflows.
-- For the generated Capacitor 8 Android scaffold: Node.js 22+, Android Studio 2025.2.1+ (or compatible Android SDK command-line tools), JDK 17+, Android SDK Platform 36 and Build Tools 36.0.0. Capacitor 8.6.0's Android template targets API 36.
+- For the generated Capacitor 8 Android scaffold: Node.js 22+, Android Studio 2025.2.1+ (or compatible Android SDK command-line tools), JDK 21+, Android SDK Platform 36 and Build Tools 36.0.0. Capacitor 8.6.0's Android template targets API 36.
 
 ## Run locally
 
@@ -52,7 +52,7 @@ GitHub Actions runs the same Python and JavaScript checks, archive integrity val
 
 ## Android APK build (opt-in GitHub Actions)
 
-The local Capacitor scaffold does not itself install Android SDK tools or produce an APK. For an optional hosted build, commit a generated PWA project under `apps/<app-slug>/` with its `package.json`, committed `package-lock.json`, `capacitor.config.json`, and `index.html`. Run `npm install` once on a trusted development machine to create/update the lockfile, review it, and commit it with the app. The hosted build uses `npm ci` and fails if the lockfile is missing, so dependency resolution is reproducible. Then open **Actions → Build Android APK → Run workflow**, enter the app slug, and start the workflow. A successful run uploads a debug APK artifact for seven days.
+The local Capacitor scaffold does not itself install Android SDK tools or produce an APK. For an optional hosted build, commit a PWA project under `apps/<app-slug>/` with `package.json`, `package-lock.json`, `capacitor.config.json`, and `index.html`. This repository includes `apps/android-smoke-test/` as a minimal committed Capacitor 8 build fixture. Its dependency lockfile is pinned to the Capacitor 8.5.3 package graph and is used to verify the workflow end to end. For your own generated apps, create/update the lockfile with `npm install` on a trusted development machine, review it, and commit it with the app. The hosted build uses `npm ci` and fails if the lockfile is missing. Then open **Actions → Build Android APK → Run workflow**, enter `android-smoke-test` as the app slug, and start the workflow. The runner uses JDK 21 and Android SDK Platform 36. A successful run uploads a debug APK artifact for seven days.
 
 This workflow sends the committed app source to a GitHub-hosted runner. Use it only when you explicitly choose a hosted build; it is not local-only. It creates or syncs the Capacitor Android project, runs the app's available tests, builds a debug APK, checks APK archive integrity, verifies the embedded Android package ID matches `capacitor.config.json`, records a SHA-256 checksum, and uploads both the APK and checksum. It does not sign a production release, publish to Google Play, or store signing credentials. Do not commit secrets or private user data into the app folder.
 
