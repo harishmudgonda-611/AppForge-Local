@@ -187,17 +187,17 @@ class AppForgeHTTPTests(unittest.TestCase):
         import re
         html = (server.STATIC / "index.html").read_text(encoding="utf-8")
         script = (server.STATIC / "app.js").read_text(encoding="utf-8")
-        element_ids = set(re.findall(r'\\bid=["\\']([^"\\']+)["\\']', html))
-        selectors = set(re.findall(r"\\$\\(['\\"]#([^'\\"]+)['\\"]\\)", script))
+        element_ids = set(re.findall(r'id="([^"]+)"', html))
+        selectors = set(re.findall(r"\\$\\('#([^']+)'\\)", script))
         self.assertTrue(selectors)
         self.assertEqual(selectors - element_ids, set())
 
     def test_service_worker_precache_assets_exist(self):
         import re
         worker = (server.STATIC / "sw.js").read_text(encoding="utf-8")
-        match = re.search(r"const CACHE_FILES?=\\[(.*?)\\]", worker)
+        match = re.search(r"const FILES=\\[(.*?)\\]", worker)
         self.assertIsNotNone(match, "Service worker cache list must be discoverable")
-        paths = re.findall(r"['\\"]([^'\\"]+)['\\"]", match.group(1))
+        paths = re.findall(r"'([^']+)'", match.group(1))
         self.assertTrue(paths)
         for path in paths:
             if path == "/":
