@@ -255,6 +255,20 @@ class AppForgeHTTPTests(unittest.TestCase):
             finally:
                 server.WORKSPACE = original
 
+    def test_api_rejects_non_text_prompt_and_slug_values(self):
+        status, data = self.post_json("/api/analyze", {"prompt": 123})
+        self.assertEqual(status, 400)
+        self.assertIn("text", data["error"])
+        status, data = self.post_json("/api/generate", {"slug": 123, "brief": "A sufficiently long app brief for validation."})
+        self.assertEqual(status, 400)
+        self.assertIn("text", data["error"])
+        status, data = self.post_json("/api/generate", {"slug": "SafeSlug", "brief": None})
+        self.assertEqual(status, 400)
+
+    def test_safe_path_rejects_non_string_inputs(self):
+        self.assertIsNone(server.Handler.safe_path(None, 123))
+        self.assertIsNone(server.Handler.safe_path(None, "Demo", 123))
+
     def test_settings_reject_remote_model_endpoint(self):
         status, data = self.post_json(
             "/api/config",
