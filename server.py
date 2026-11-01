@@ -9,10 +9,14 @@ import advanced
 ROOT = Path(__file__).resolve().parent
 STATIC = ROOT / 'static'
 WORKSPACE = ROOT / 'workspace'
-WORKSPACE.mkdir(exist_ok=True)
 CONFIG = ROOT / 'config.local.json'
 STATE = ROOT / 'state'
-STATE.mkdir(exist_ok=True)
+for _private_dir in (WORKSPACE, STATE):
+    if _private_dir.is_symlink() or (_private_dir.exists() and not _private_dir.is_dir()):
+        raise RuntimeError(f'AppForge data directory must be a real directory: {_private_dir.name}')
+    _private_dir.mkdir(exist_ok=True)
+if CONFIG.is_symlink() or (CONFIG.exists() and not CONFIG.is_file()):
+    raise RuntimeError('AppForge config.local.json must be a regular file, not a symlink or directory.')
 FEEDBACK = STATE / 'feedback.jsonl'
 ROADMAP = STATE / 'improvement-roadmap.json'
 DEFAULT_CONFIG = {'llm_base_url':'http://127.0.0.1:8080/v1','llm_model':'qwen2.5-coder','llm_api_key':'ollama','timeout_seconds':120}
@@ -402,5 +406,5 @@ class Handler(SimpleHTTPRequestHandler):
     def log_message(self,*args): pass
 
 if __name__=='__main__':
-    host=os.environ.get('APPFORGE_HOST','127.0.0.1'); port=int(os.environ.get('APPFORGE_PORT','8787'))
+    host='127.0.0.1'; port=int(os.environ.get('APPFORGE_PORT','8787'))
     print(f'AppForge Local running at http://{host}:{port}'); ThreadingHTTPServer((host,port),Handler).serve_forever()
