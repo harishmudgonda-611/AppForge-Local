@@ -516,6 +516,28 @@ class AppForgeAdvancedTests(unittest.TestCase):
             finally:
                 advanced.ROOT, advanced.WORKSPACE = old_root, old_workspace
 
+    @unittest.skipUnless(advanced.shutil.which("node") and advanced.shutil.which("npm"), "Node.js and npm are required for scaffold integration test")
+    def test_capacitor_scaffold_runs_real_test_and_web_build(self):
+        import subprocess
+        old = advanced.WORKSPACE
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            project = root / "ScaffoldE2E"
+            project.mkdir()
+            (project / "index.html").write_text("<!doctype html><html><body>Smoke</body></html>")
+            (project / "appforge-project.json").write_text('{"slug":"ScaffoldE2E"}')
+            advanced.WORKSPACE = root
+            try:
+                scaffold = advanced.create_capacitor("ScaffoldE2E", "Scaffold E2E")
+                self.assertTrue(scaffold["ok"])
+                tests = subprocess.run(["npm", "test"], cwd=project, capture_output=True, text=True, timeout=60)
+                self.assertEqual(tests.returncode, 0, tests.stdout + tests.stderr)
+                build = subprocess.run(["npm", "run", "build"], cwd=project, capture_output=True, text=True, timeout=60)
+                self.assertEqual(build.returncode, 0, build.stdout + build.stderr)
+                self.assertEqual((project / "dist" / "index.html").read_text(), (project / "index.html").read_text())
+            finally:
+                advanced.WORKSPACE = old
+
     def test_capacitor_scaffold_has_explicit_android_build_scripts(self):
         old_workspace = advanced.WORKSPACE
         with tempfile.TemporaryDirectory() as tmp:
