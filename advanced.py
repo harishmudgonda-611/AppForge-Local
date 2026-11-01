@@ -488,11 +488,22 @@ def run_aider(project_name, prompt, approved=False):
     cp=git_action(project_name,'checkpoint')
     if not cp.get('ok'): return {'ok':False,'error':'Git checkpoint failed; refusing to run coding agent.','checkpoint':cp}
     cmd=['aider','--message',prompt,'--yes','--no-auto-commits','--model','openai/'+str(cfg.get('llm_model','qwen2.5-coder')),'--openai-api-base',str(cfg.get('llm_base_url','http://127.0.0.1:8080/v1'))]
-    env=os.environ.copy(); env['OPENAI_API_KEY']=str(cfg.get('llm_api_key','ollama'))
+    # Do not pass the AppForge process environment wholesale to a project-aware coding agent.
+    env={}
+    for key in ('PATH','HOME','USERPROFILE','SYSTEMROOT','WINDIR','TEMP','TMP','TMPDIR'):
+        if key in os.environ: env[key]=os.environ[key]
+    env.update({'OPENAI_API_KEY':str(cfg.get('llm_api_key','ollama')),
+                'GIT_TERMINAL_PROMPT':'0','CI':'true'})
+    reports=p/'test-reports'
+    if reports.is_symlink() or (reports.exists() and not reports.is_dir()):
+        return {'ok':False,'installed':True,'error':'Refusing to write Aider output through a symlinked or invalid test-reports path.'}
     try:
-        proc=subprocess.run(cmd,cwd=p,env=env,capture_output=True,text=True,timeout=900)
+        proc=subprocess.run(cmd,cwd=p,env=env,stdin=subprocess.DEVNULL,capture_output=True,text=True,timeout=900)
         log={'created_at':int(time.time()),'command':'aider --message [redacted]','returncode':proc.returncode,'stdout':proc.stdout[-12000:],'stderr':proc.stderr[-12000:]}
-        (p/'test-reports').mkdir(exist_ok=True); (p/'test-reports'/f'aider-{log["created_at"]}.json').write_text(json.dumps(log,indent=2))
+        reports.mkdir(exist_ok=True)
+        report=reports/f'aider-{log["created_at"]}.json'
+        if report.is_symlink(): return {'ok':False,'installed':True,'error':'Refusing to overwrite a symlinked Aider report.'}
+        report.write_text(json.dumps(log,indent=2))
         return {'ok':proc.returncode==0,'installed':True,'log':log,'note':'Review the Git diff and run tests before accepting the changes.'}
     except Exception as e: return {'ok':False,'installed':True,'error':str(e)}
 
