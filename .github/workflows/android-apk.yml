@@ -122,14 +122,10 @@ jobs:
           arch: x86_64
           profile: pixel_2
           script: |
-            set -eu
-            APP_DIR="apps/${{ steps.validate.outputs.app_slug }}"
-            APK_PATH="${{ steps.apk.outputs.path }}"
-            APP_ID="$(node -p "require('./$APP_DIR/capacitor.config.json').appId")"
-            adb install -r "$APP_DIR/$APK_PATH"
-            adb shell am start -n "$APP_ID/.MainActivity"
+            adb install -r "apps/${{ steps.validate.outputs.app_slug }}/${{ steps.apk.outputs.path }}"
+            adb shell am start -n "$(node -p 'require("./apps/${{ steps.validate.outputs.app_slug }}/capacitor.config.json").appId')/.MainActivity"
             sleep 8
-            adb shell dumpsys activity activities | grep -F "$APP_ID"
+            adb shell dumpsys activity activities | grep -F "$(node -p 'require("./apps/${{ steps.validate.outputs.app_slug }}/capacitor.config.json").appId')"
 
       - uses: actions/upload-artifact@v7
         with:

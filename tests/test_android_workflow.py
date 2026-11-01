@@ -48,6 +48,8 @@ class AndroidWorkflowContractTests(unittest.TestCase):
         self.assertIn("adb install -r", self.workflow)
         self.assertIn("adb shell am start", self.workflow)
         self.assertIn("dumpsys activity activities", self.workflow)
+        self.assertIn("adb install -r \"apps/${{ steps.validate.outputs.app_slug }}", self.workflow)
+        self.assertNotIn('APP_DIR="apps/${{ steps.validate.outputs.app_slug }}"', self.workflow)
 
     def test_artifact_contains_apk_and_checksum(self):
         self.assertIn("app-debug.apk", self.workflow)
