@@ -221,6 +221,13 @@ class Handler(SimpleHTTPRequestHandler):
                 missing=[x for x in ('index.html','app.js','styles.css') if x not in files]
                 return self.send_json({'ok':not missing,'project':name,'files':files,'missing_recommended_files':missing,'message':'Static file check complete. This is not a substitute for device testing.'})
             if command=='apk':
+                # Building installs/runs project-controlled tools and Gradle scripts.
+                # Require an explicit, deliberate approval on every build request.
+                if data.get('approved') is not True:
+                    return self.send_json({
+                        'error':'APK build requires explicit approval. Review the project source and dependencies, then retry with approved=true.',
+                        'requires_approval':True,
+                    }, 403)
                 package=project/'package.json'
                 if not package.exists(): return self.send_json({'error':'No package.json found. Generate/prepare a Capacitor-compatible project first.'},400)
                 try:
