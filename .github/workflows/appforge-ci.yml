@@ -63,8 +63,21 @@ jobs:
           package="AppForge-Local-source"
           mkdir -p "$package"
           cp -a server.py advanced.py static tests README.md LICENSE SECURITY.md CONTRIBUTING.md config.example.json start.sh start.bat "$package/"
+          find "$package" -type d -name __pycache__ -prune -exec rm -rf {} +
+          find "$package" -type f -name '*.pyc' -delete
           zip -qr AppForge-Local-source.zip "$package"
           unzip -t AppForge-Local-source.zip
+          if unzip -l AppForge-Local-source.zip | grep -Eq '__pycache__|\\.pyc
+      - uses: actions/upload-artifact@v4
+        with:
+          name: AppForge-Local-source
+          path: AppForge-Local-source.zip
+          if-no-files-found: error
+          retention-days: 14
+; then
+            echo "Unexpected Python cache files in source artifact."
+            exit 1
+          fi
       - uses: actions/upload-artifact@v4
         with:
           name: AppForge-Local-source
