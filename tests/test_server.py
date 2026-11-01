@@ -644,5 +644,63 @@ class AppForgeHTTPTests(unittest.TestCase):
             server.CONFIG.write_text(original, encoding="utf-8")
 
 
+
+    def test_local_model_request_omits_authorization_when_api_key_is_empty(self):
+        import tempfile
+        from pathlib import Path
+        from unittest.mock import patch
+        original = server.CONFIG
+        captured = {}
+        response = BytesIO(b'{"choices":[{"message":{"content":"local model ok"}}]}')
+        def fake_urlopen(request, timeout=None):
+            captured["authorization"] = request.get_header("Authorization")
+            captured["url"] = request.full_url
+            return response
+        with tempfile.TemporaryDirectory() as tmp:
+            config = Path(tmp) / "config.json"
+            config.write_text(json.dumps({
+                "llm_base_url": "http://127.0.0.1:8080/v1",
+                "llm_model": "qwen-local",
+                "llm_api_key": "",
+                "timeout_seconds": 10,
+            }))
+            server.CONFIG = config
+            try:
+                with patch.object(server.urllib.request, "urlopen", side_effect=fake_urlopen):
+                    result = server.Handler.call_llm_data(None, "system", "user")
+                self.assertTrue(result["ok"], result)
+                self.assertEqual(result["text"], "local model ok")
+                self.assertIsNone(captured["authorization"])
+                self.assertEqual(captured["url"], "http://127.0.0.1:8080/v1/chat/completions")
+            finally:
+                server.CONFIG = original
+
+    def test_local_model_request_sends_only_an_explicit_api_key(self):
+        import tempfile
+        from pathlib import Path
+        from unittest.mock import patch
+        original = server.CONFIG
+        captured = {}
+        response = BytesIO(b'{"choices":[{"message":{"content":"authenticated local model ok"}}]}')
+        def fake_urlopen(request, timeout=None):
+            captured["authorization"] = request.get_header("Authorization")
+            return response
+        with tempfile.TemporaryDirectory() as tmp:
+            config = Path(tmp) / "config.json"
+            config.write_text(json.dumps({
+                "llm_base_url": "http://127.0.0.1:8080/v1",
+                "llm_model": "qwen-local",
+                "llm_api_key": "user-supplied-key",
+                "timeout_seconds": 10,
+            }))
+            server.CONFIG = config
+            try:
+                with patch.object(server.urllib.request, "urlopen", side_effect=fake_urlopen):
+                    result = server.Handler.call_llm_data(None, "system", "user")
+                self.assertTrue(result["ok"], result)
+                self.assertEqual(captured["authorization"], "Bearer user-supplied-key")
+            finally:
+                server.CONFIG = original
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
