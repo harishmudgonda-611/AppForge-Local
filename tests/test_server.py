@@ -333,7 +333,7 @@ class AppForgeHTTPTests(unittest.TestCase):
                 }
             }
             def fake_llm(self, system, user, raw=False):
-                self.assertTrue(raw)
+                assert raw is True
                 return {"ok": True, "data": generated, "text": "{}"}
             try:
                 with patch.object(server.Handler, "call_llm", fake_llm):
