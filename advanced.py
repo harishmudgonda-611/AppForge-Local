@@ -134,9 +134,10 @@ def replica_run(data, llm_fn):
         allowed = {"index.html", "app.js", "styles.css", "manifest.webmanifest", "sw.js", "README.md"}
         if not build_obj["files"] or any(k not in allowed or not isinstance(v, str) or len(v) > 150000 for k, v in build_obj["files"].items()):
             return {"status": 400, "body": {"error": "Build response contained unsafe paths or oversized files. No app files were written."}}
-        missing = {"index.html", "app.js", "styles.css"} - set(build_obj["files"])
+        required = {"index.html", "app.js", "styles.css", "manifest.webmanifest", "sw.js"}
+        missing = required - {k for k, v in build_obj["files"].items() if isinstance(v, str) and v.strip()}
         if missing:
-            return {"status": 422, "body": {"error": "Build response is missing required app files: " + ", ".join(sorted(missing)), "written": []}}
+            return {"status": 422, "body": {"error": "Build response is missing required PWA files: " + ", ".join(sorted(missing)), "written": []}}
         # Existing top-level symlinks must not redirect generated source writes outside the project.
         for rel in build_obj["files"]:
             target = project / rel
