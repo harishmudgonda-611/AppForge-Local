@@ -52,7 +52,6 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test ! -L "apps/${{ steps.validate.outputs.app_slug }}"
           test -s package.json
           test -s capacitor.config.json
           test -s index.html
@@ -87,7 +86,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: appforge-${{ inputs.app_slug }}-debug-apk
-          path: apps/${{ inputs.app_slug }}/${{ steps.apk.outputs.path }}
+          name: appforge-${{ steps.validate.outputs.app_slug }}-debug-apk
+          path: apps/${{ steps.validate.outputs.app_slug }}/${{ steps.apk.outputs.path }}
           if-no-files-found: error
           retention-days: 7
