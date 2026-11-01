@@ -21,12 +21,39 @@ def local_endpoint_allowed(value):
     try:
         parsed=urlparse(str(value))
         if parsed.scheme!='http' or not parsed.hostname: return False
+        if parsed.username is not None or parsed.password is not None or parsed.query or parsed.fragment: return False
         host=parsed.hostname.lower().rstrip('.')
         if host=='localhost': return True
         addr=ipaddress.ip_address(host)
         return bool(addr.is_loopback or addr.is_private or addr.is_link_local)
     except Exception:
         return False
+
+def validate_config_update(current, updates):
+    """Return a validated config copy; never persist partially invalid settings."""
+    if not isinstance(updates, dict):
+        return None, 'Settings must be a JSON object.'
+    cfg=dict(current)
+    allowed=('llm_base_url','llm_model','llm_api_key','timeout_seconds')
+    for key in allowed:
+        if key in updates:
+            cfg[key]=updates[key]
+    base=cfg.get('llm_base_url')
+    if not isinstance(base,str) or len(base)>512 or not local_endpoint_allowed(base):
+        return None, 'Use an HTTP localhost or private-LAN model URL (maximum 512 characters), without credentials, query strings or fragments.'
+    model=cfg.get('llm_model')
+    if not isinstance(model,str) or not model.strip() or len(model)>200:
+        return None, 'Model name must be 1–200 characters.'
+    key=cfg.get('llm_api_key')
+    if not isinstance(key,str) or len(key)>1000:
+        return None, 'API key must be text and no longer than 1000 characters.'
+    timeout=cfg.get('timeout_seconds')
+    if isinstance(timeout,bool) or not isinstance(timeout,int) or not 5 <= timeout <= 600:
+        return None, 'Timeout must be a whole number between 5 and 600 seconds.'
+    cfg['llm_base_url']=base.rstrip('/')
+    cfg['llm_model']=model.strip()
+    return cfg, None
+
 if not CONFIG.exists(): CONFIG.write_text(json.dumps(DEFAULT_CONFIG, indent=2))
 
 class Handler(SimpleHTTPRequestHandler):
@@ -128,12 +155,11 @@ class Handler(SimpleHTTPRequestHandler):
             if self.path=='/api/track': return self.send_json(advanced.track_event(data.get('project',''),data.get('event','manual'),data.get('value'),data.get('metadata')))
         except Exception as e: return self.send_json({'error':str(e)},400)
         if self.path=='/api/config':
-            cfg=json.loads(CONFIG.read_text())
-            for k in ('llm_base_url','llm_model','llm_api_key','timeout_seconds'):
-                if k in data: cfg[k]=data[k]
-            if not local_endpoint_allowed(cfg['llm_base_url']):
-                return self.send_json({'error':'For local-first safety, configure a local LAN/localhost LLM endpoint only.'},400)
-            CONFIG.write_text(json.dumps(cfg,indent=2)); return self.send_json({'ok':True,'config':{k:v for k,v in cfg.items() if k!='llm_api_key'}})
+            current=json.loads(CONFIG.read_text())
+            cfg,error=validate_config_update(current,data)
+            if error: return self.send_json({'error':error},400)
+            CONFIG.write_text(json.dumps(cfg,indent=2))
+            return self.send_json({'ok':True,'config':{k:v for k,v in cfg.items() if k!='llm_api_key'}})
         if self.path=='/api/feedback':
             if not isinstance(data.get('feedback'),str) or not data['feedback'].strip(): return self.send_json({'error':'Feedback text is required.'},400)
             entry={'time':int(time.time()),'feedback':data['feedback'].strip()[:4000],'kind':str(data.get('kind','general'))[:40]}
