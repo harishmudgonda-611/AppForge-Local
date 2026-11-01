@@ -16,7 +16,8 @@ jobs:
     name: Build and verify debug APK
     runs-on: ubuntu-latest
     steps:
-      - name: Validate app slug
+      - name: Validate app slug and app directory
+        id: validate
         shell: bash
         env:
           APP_SLUG: ${{ inputs.app_slug }}
@@ -26,6 +27,7 @@ jobs:
             echo "Invalid app slug. Use letters, numbers, underscore or hyphen."
             exit 1
           fi
+          printf 'app_slug=%s\n' "$APP_SLUG" >> "$GITHUB_OUTPUT"
 
       - uses: actions/checkout@v4
 
@@ -41,10 +43,12 @@ jobs:
       - uses: android-actions/setup-android@v3
 
       - name: Install app dependencies and validate
-        working-directory: apps/${{ inputs.app_slug }}
+        working-directory: apps/${{ steps.validate.outputs.app_slug }}
         shell: bash
         run: |
           set -euo pipefail
+          test -d .
+          test ! -L .
           test -s package.json
           test -s capacitor.config.json
           test -s index.html
@@ -54,7 +58,7 @@ jobs:
           test -s dist/index.html
 
       - name: Create Android project and sync Capacitor
-        working-directory: apps/${{ inputs.app_slug }}
+        working-directory: apps/${{ steps.validate.outputs.app_slug }}
         shell: bash
         run: |
           set -euo pipefail
@@ -63,12 +67,12 @@ jobs:
           test -x android/gradlew
 
       - name: Build debug APK
-        working-directory: apps/${{ inputs.app_slug }}/android
+        working-directory: apps/${{ steps.validate.outputs.app_slug }}/android
         run: ./gradlew --no-daemon assembleDebug
 
       - name: Verify APK exists
         id: apk
-        working-directory: apps/${{ inputs.app_slug }}
+        working-directory: apps/${{ steps.validate.outputs.app_slug }}
         shell: bash
         run: |
           set -euo pipefail
