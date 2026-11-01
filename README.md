@@ -48,7 +48,7 @@ python -m unittest discover -s tests -v
 node --check static/app.js
 ```
 
-GitHub Actions runs the same Python and JavaScript checks, archive integrity validation, and HTTP smoke tests.
+GitHub Actions runs the same Python and JavaScript checks, archive integrity validation, and HTTP smoke tests. Each successful CI run also publishes a current `AppForge-Local-source.zip` artifact (Actions → latest successful AppForge Local CI run → Artifacts). The legacy ZIP files in the repository are retained for reference; use the CI artifact for the latest validated source bundle.
 
 ## Android APK build (opt-in GitHub Actions)
 
