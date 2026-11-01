@@ -176,6 +176,8 @@ class Handler(SimpleHTTPRequestHandler):
         if not self.local_host_request_allowed():
             return self.send_json({'error':'Request rejected: AppForge is available only through a loopback Host header.'},403)
         p=urlparse(self.path)
+        if p.path.startswith('/api/') and not self.same_origin_request_allowed():
+            return self.send_json({'error':'Request rejected: AppForge accepts API requests only from its local same-origin interface.'},403)
         if p.path.startswith('/api/'):
             try:
                 q=parse_qs(p.query)
