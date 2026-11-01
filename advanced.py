@@ -345,10 +345,10 @@ def create_capacitor(project_name, app_name=None):
             "android:sync": "npm run build && cap sync android",
             "android:debug": "npm run android:sync && cd android && ./gradlew assembleDebug"
         },
-        "dependencies": {"@capacitor/core": "^6.2.0"},
+        "dependencies": {"@capacitor/core": "^8.6.0"},
         "devDependencies": {
-            "@capacitor/cli": "^6.2.0",
-            "@capacitor/android": "^6.2.0"
+            "@capacitor/cli": "^8.6.0",
+            "@capacitor/android": "^8.6.0"
         }
     }
     (p / 'package.json').write_text(json.dumps(package, indent=2))
