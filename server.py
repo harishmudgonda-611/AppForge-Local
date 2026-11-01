@@ -34,9 +34,27 @@ class Handler(SimpleHTTPRequestHandler):
     def send_json(self, obj, status=200):
         data=json.dumps(obj,ensure_ascii=False).encode(); self.send_response(status); self.send_header('Content-Type','application/json; charset=utf-8'); self.send_header('Content-Length',str(len(data))); self.send_header('Cache-Control','no-store'); self.end_headers(); self.wfile.write(data)
     def body(self):
-        n=int(self.headers.get('Content-Length','0'))
-        if n>2_000_000: raise ValueError('Request too large')
-        return json.loads(self.rfile.read(n) or b'{}')
+        raw_length = self.headers.get('Content-Length')
+        if raw_length is None:
+            raise ValueError('Content-Length header is required')
+        try:
+            n = int(raw_length)
+        except (TypeError, ValueError):
+            raise ValueError('Invalid Content-Length')
+        if n < 0:
+            raise ValueError('Invalid Content-Length')
+        if n > 2_000_000:
+            raise ValueError('Request too large')
+        raw = self.rfile.read(n)
+        if len(raw) != n:
+            raise ValueError('Incomplete request body')
+        try:
+            data = json.loads(raw or b'{}')
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            raise ValueError('Request body must be valid JSON')
+        if not isinstance(data, dict):
+            raise ValueError('Request body must be a JSON object')
+        return data
     def do_GET(self):
         p=urlparse(self.path)
         if p.path.startswith('/api/'):
