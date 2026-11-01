@@ -21,7 +21,7 @@ Google Play links are provided for manual research; this project does not claim 
 - Python 3.10 or newer. The server uses the Python standard library; no third-party Python packages are required.
 - Optional local model server exposing an OpenAI-compatible `/v1/chat/completions` API (for example llama.cpp or Ollama).
 - Optional Node.js 22+ / npm for JavaScript project checks and generated-app workflows.
-- For the generated Capacitor 8 Android scaffold: Node.js 22+, Android Studio 2025.2.1+ (or compatible Android SDK command-line tools), JDK 17+, and the Android SDK platform/build tools required by the generated Gradle project.
+- For the generated Capacitor 8 Android scaffold: Node.js 22+, Android Studio 2025.2.1+ (or compatible Android SDK command-line tools), JDK 17+, Android SDK Platform 36 and Build Tools 36.0.0. Capacitor 8.6.0's Android template targets API 36.
 
 ## Run locally
 
