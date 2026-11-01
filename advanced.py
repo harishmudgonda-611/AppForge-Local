@@ -337,7 +337,7 @@ def create_capacitor(project_name, app_name=None):
         'note': 'Only the Capacitor configuration is prepared. Android platform creation, SDK setup, dependency installation and APK generation must be completed and verified separately.'
     }
 
-def test_project(project_name, repair=False, call_llm=None):
+def test_project(project_name, repair=False, call_llm=None, run_npm_tests=False):
     if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_-]{0,63}',project_name or ''): raise ValueError('Invalid project slug')
     p=(WORKSPACE/project_name).resolve()
     if p.parent!=WORKSPACE.resolve() or not p.is_dir(): raise ValueError('Project not found')
@@ -349,7 +349,7 @@ def test_project(project_name, repair=False, call_llm=None):
         if any(x in f.parts for x in ('node_modules','.git','android')): continue
         try: json.loads(f.read_text())
         except Exception as e: failures.append(f'Invalid JSON {f.relative_to(p)}: {e}')
-    if (p/'package.json').exists() and shutil.which('npm'):
+    if run_npm_tests and (p/'package.json').exists() and shutil.which('npm'):
         try:
             proc=subprocess.run(['npm','test'],cwd=p,capture_output=True,text=True,timeout=120)
             logs.append({'stage':'npm-test','returncode':proc.returncode,'stdout':proc.stdout[-5000:],'stderr':proc.stderr[-5000:]})
@@ -363,7 +363,7 @@ def test_project(project_name, repair=False, call_llm=None):
                 proc=subprocess.run(['node','--check',str(f)],capture_output=True,text=True,timeout=20)
                 if proc.returncode: failures.append(f'JS syntax failed {f.relative_to(p)}: {proc.stderr[-1000:]}')
             except Exception as e: failures.append(f'JS syntax check error: {e}')
-    report={'project':project_name,'created_at':int(time.time()),'ok':not failures,'failures':failures,'logs':logs,'checks':['required files','JSON syntax','JavaScript syntax when Node exists','npm test when configured'],'repair_mode':'proposal-only' if repair else 'disabled'}
+    report={'project':project_name,'created_at':int(time.time()),'ok':not failures,'failures':failures,'logs':logs,'checks':['required files','JSON syntax','JavaScript syntax when Node exists'] + (['owner-approved npm test'] if run_npm_tests else []),'repair_mode':'proposal-only' if repair else 'disabled'}
     out=p/'test-reports'; out.mkdir(exist_ok=True); (out/f'{report["created_at"]}.json').write_text(json.dumps(report,indent=2))
     return report
 
@@ -372,26 +372,40 @@ def git_action(project_name, action):
     p=(WORKSPACE/project_name).resolve()
     if p.parent!=WORKSPACE.resolve() or not p.is_dir(): raise ValueError('Project not found')
     if not shutil.which('git'): return {'ok':False,'error':'Git is not installed'}
-    if not (p/'.git').exists():
-        subprocess.run(['git','init'],cwd=p,capture_output=True,text=True,timeout=20,check=True)
-        subprocess.run(['git','config','user.email','appforge-local@localhost'],cwd=p,capture_output=True,timeout=10)
-        subprocess.run(['git','config','user.name','AppForge Local'],cwd=p,capture_output=True,timeout=10)
+    git_meta=p/'.git'
+    if git_meta.is_symlink():
+        raise ValueError('Project Git metadata cannot be a symlink.')
+    if git_meta.exists() and not git_meta.is_dir():
+        raise ValueError('Unsupported Git metadata path; expected a real .git directory.')
+    # Override repository and global hook configuration for every Git command. Project hooks
+    # are untrusted code and must never execute during checkpoints or rollbacks.
+    hooks_dir=STATE/'empty-git-hooks'
+    hooks_dir.mkdir(parents=True,exist_ok=True)
+    git_env=os.environ.copy()
+    git_env.update({'GIT_CONFIG_COUNT':'1','GIT_CONFIG_KEY_0':'core.hooksPath',
+                    'GIT_CONFIG_VALUE_0':str(hooks_dir.resolve()),'GIT_TERMINAL_PROMPT':'0'})
+    def run_git(args, **kwargs):
+        return subprocess.run(['git']+args,cwd=p,env=git_env,**kwargs)
+    if not git_meta.exists():
+        run_git(['init'],capture_output=True,text=True,timeout=20,check=True)
+        run_git(['config','user.email','appforge-local@localhost'],capture_output=True,text=True,timeout=10,check=True)
+        run_git(['config','user.name','AppForge Local'],capture_output=True,text=True,timeout=10,check=True)
     if action=='checkpoint':
-        subprocess.run(['git','add','-A'],cwd=p,capture_output=True,timeout=30,check=True)
-        proc=subprocess.run(['git','commit','-m',f'AppForge checkpoint {int(time.time())}'],cwd=p,capture_output=True,text=True,timeout=30)
+        run_git(['add','-A'],capture_output=True,timeout=30,check=True)
+        proc=run_git(['commit','-m',f'AppForge checkpoint {int(time.time())}'],capture_output=True,text=True,timeout=30)
         if proc.returncode and 'nothing to commit' in (proc.stdout+' '+proc.stderr).lower():
-            head=subprocess.run(['git','rev-parse','--verify','HEAD'],cwd=p,capture_output=True,text=True,timeout=10)
+            head=run_git(['rev-parse','--verify','HEAD'],capture_output=True,text=True,timeout=10)
             if head.returncode==0 and head.stdout.strip():
                 return {'ok':True,'stdout':proc.stdout[-2000:],'stderr':proc.stderr[-2000:],'action':action,'checkpoint_sha':head.stdout.strip(),'note':'Working tree is clean; existing HEAD is the checkpoint.'}
         return {'ok':proc.returncode==0,'stdout':proc.stdout[-2000:],'stderr':proc.stderr[-2000:],'action':action}
     if action=='status':
-        proc=subprocess.run(['git','status','--short'],cwd=p,capture_output=True,text=True,timeout=20)
+        proc=run_git(['status','--short'],capture_output=True,text=True,timeout=20)
         return {'ok':proc.returncode==0,'status':proc.stdout,'action':action}
     if action=='rollback':
-        proc=subprocess.run(['git','log','-1','--format=%H'],cwd=p,capture_output=True,text=True,timeout=20)
+        proc=run_git(['log','-1','--format=%H'],capture_output=True,text=True,timeout=20)
         if proc.returncode or not proc.stdout.strip(): return {'ok':False,'error':'No checkpoint commit exists'}
         # Roll back only tracked working-tree edits to the last checkpoint; untracked files are not deleted.
-        reset=subprocess.run(['git','restore','--worktree','--staged','.'],cwd=p,capture_output=True,text=True,timeout=20)
+        reset=run_git(['restore','--worktree','--staged','.'],capture_output=True,text=True,timeout=20)
         return {'ok':reset.returncode==0,'stdout':reset.stdout,'stderr':reset.stderr,'note':'Restored tracked files to the last commit. Untracked files are preserved.'}
     raise ValueError('Unknown Git action')
 
