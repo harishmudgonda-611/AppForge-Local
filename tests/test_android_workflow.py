@@ -59,6 +59,16 @@ class AndroidWorkflowContractTests(unittest.TestCase):
         self.assertTrue((ANDROID_FIXTURE / "index.html").is_file())
         self.assertTrue((ANDROID_FIXTURE / "build.mjs").is_file())
 
+    def test_android_quick_start_uses_localhost_and_no_cloud_runtime(self):
+        guide = (ROOT / "ANDROID-QUICKSTART.md").read_text(encoding="utf-8")
+        setup = (ROOT / "android-setup.sh").read_text(encoding="utf-8")
+        launcher = (ROOT / "android-start.sh").read_text(encoding="utf-8")
+        self.assertIn("127.0.0.1:8787", guide)
+        self.assertIn("pkg install -y python curl", setup)
+        self.assertIn("127.0.0.1:8787", launcher)
+        self.assertIn("api/health", launcher)
+        self.assertNotIn("0.0.0.0", launcher)
+
     def test_documentation_discloses_hosted_build_and_lockfile(self):
         self.assertIn("package-lock.json", self.readme)
         self.assertIn("GitHub-hosted runner", self.readme)

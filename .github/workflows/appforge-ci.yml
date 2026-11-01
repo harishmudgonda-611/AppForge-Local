@@ -47,6 +47,8 @@ jobs:
         run: |
           python -m compileall -q server.py advanced.py tests
           python -m unittest discover -s tests -v
+      - name: Validate shell launchers
+        run: bash -n start.sh android-setup.sh android-start.sh
       - name: Validate browser JavaScript
         run: |
           node --check static/app.js
