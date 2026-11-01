@@ -297,8 +297,21 @@ class Handler(SimpleHTTPRequestHandler):
             brief=brief.strip()[:8000]
             if len(brief)<20: return self.send_json({'error':'Provide a detailed app brief (at least 20 characters).'},400)
             project=self.safe_path(name)
-            if project.exists(): name=name[:42]+'_'+str(int(time.time()))[-6:]; project=self.safe_path(name)
-            project.mkdir(parents=True)
+            if project is None:
+                return self.send_json({'ok':False,'error':'The requested project path is unsafe or is already a symlink.'},409)
+            if project.exists():
+                base=name[:40]
+                suffix=str(int(time.time()))[-6:]
+                candidate=f'{base}_{suffix}'
+                counter=1
+                while (WORKSPACE/candidate).exists() or (WORKSPACE/candidate).is_symlink():
+                    candidate=f'{base}_{suffix}_{counter}'
+                    counter+=1
+                name=candidate
+                project=self.safe_path(name)
+            if project is None:
+                return self.send_json({'ok':False,'error':'Could not allocate a safe project directory.'},409)
+            project.mkdir(parents=True,exist_ok=False)
             system='You are a senior software engineer. Produce a production-oriented, ORIGINAL Android/PWA app implementation. Do not copy any named competitor source or assets. Output a JSON object with keys: app_name, description, files (object mapping relative filenames to complete text content), build_notes, tests. Prefer a self-contained PWA (index.html, app.js, styles.css, manifest.webmanifest, sw.js) and include Android packaging instructions for Capacitor when relevant. Do not use markdown fences. Avoid secrets. Keep paths simple and safe.'
             result=self.call_llm(system,brief,raw=True)
             if not result.get('ok'):
