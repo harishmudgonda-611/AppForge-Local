@@ -349,6 +349,9 @@ class AppForgeAdvancedTests(unittest.TestCase):
         self.assertTrue(advanced.local_endpoint_allowed("http://192.168.1.20:11434/v1"))
         self.assertFalse(advanced.local_endpoint_allowed("https://example.com/v1"))
         self.assertFalse(advanced.local_endpoint_allowed("http://8.8.8.8/v1"))
+        self.assertFalse(advanced.local_endpoint_allowed("http://user:pass@127.0.0.1:8080/v1"))
+        self.assertFalse(advanced.local_endpoint_allowed("http://127.0.0.1:8080/v1?token=secret"))
+        self.assertFalse(advanced.local_endpoint_allowed("http://127.0.0.1:8080/v1#fragment"))
         self.assertFalse(advanced.local_endpoint_allowed("file:///etc/passwd"))
 
 
