@@ -330,6 +330,19 @@ class AppForgeHTTPTests(unittest.TestCase):
         self.assertIsNone(normalized)
         self.assertIn("JavaScript syntax validation", error)
 
+    def test_generated_files_reject_invalid_service_worker_javascript(self):
+        files = {
+            "index.html": "<html></html>",
+            "app.js": "console.log('ok')",
+            "styles.css": "body{}",
+            "manifest.webmanifest": '{"name":"Demo"}',
+            "sw.js": "function {"
+        }
+        normalized, error = server.validate_generated_files(files)
+        if server.shutil.which("node"):
+            self.assertIsNone(normalized)
+            self.assertIn("sw.js", error)
+
     def test_generated_files_accept_safe_nested_assets(self):
         files = {"index.html": "<!doctype html><html></html>", "app.js": "console.log('ok')", "styles.css": "body{}", "manifest.webmanifest": '{"name":"Demo"}', "sw.js": "self.addEventListener('install',()=>{});", "assets/icon.svg": "<svg></svg>"}
         normalized, error = server.validate_generated_files(files)
