@@ -66,6 +66,43 @@ class AppForgeHTTPTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "too large"):
             handler.body()
 
+    def test_apk_build_requires_explicit_approval_before_running_tools(self):
+        import tempfile
+        from pathlib import Path
+        original = server.WORKSPACE
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Path(tmp)
+            (workspace / "Demo").mkdir()
+            server.WORKSPACE = workspace
+            try:
+                status, data = self.post_json(
+                    "/api/build",
+                    {"project": "Demo", "command": "apk"},
+                )
+                self.assertEqual(status, 403)
+                self.assertTrue(data["requires_approval"])
+                self.assertIn("explicit approval", data["error"])
+            finally:
+                server.WORKSPACE = original
+
+    def test_apk_build_does_not_accept_truthy_non_boolean_approval(self):
+        import tempfile
+        from pathlib import Path
+        original = server.WORKSPACE
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Path(tmp)
+            (workspace / "Demo").mkdir()
+            server.WORKSPACE = workspace
+            try:
+                status, data = self.post_json(
+                    "/api/build",
+                    {"project": "Demo", "command": "apk", "approved": "yes"},
+                )
+                self.assertEqual(status, 403)
+                self.assertTrue(data["requires_approval"])
+            finally:
+                server.WORKSPACE = original
+
     def test_home_page_is_served(self):
         with urllib.request.urlopen(self.base_url + "/", timeout=3) as response:
             body = response.read().decode("utf-8")
