@@ -332,6 +332,14 @@ class AppForgeHTTPTests(unittest.TestCase):
             self.assertIsNone(normalized, path)
             self.assertTrue(error, path)
 
+    def test_generated_files_reject_sensitive_filenames(self):
+        required = {"index.html": "<html></html>", "app.js": "console.log('ok')", "styles.css": "body{}", "manifest.webmanifest": '{"name":"Demo"}', "sw.js": "self.addEventListener('install',()=>{});"}
+        for sensitive in (".env", ".env.production", "private.pem", "signing.jks", "api-token.json", "credentials.json"):
+            files = {**required, sensitive: "secret"}
+            normalized, error = server.validate_generated_files(files)
+            self.assertIsNone(normalized, sensitive)
+            self.assertIn("sensitive filename", error)
+
     def test_generated_files_enforce_count_and_size_limits(self):
         too_many = {"index.html": "ok", "app.js": "ok", "styles.css": "body{}", "manifest.webmanifest": '{"name":"Demo"}', "sw.js": "ok"}
         too_many.update({f"asset-{i}.txt": "x" for i in range(80)})
