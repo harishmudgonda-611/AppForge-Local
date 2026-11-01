@@ -184,7 +184,11 @@ class Handler(SimpleHTTPRequestHandler):
             if self.path=='/api/test-repair': return self.send_json(advanced.repair_project(str(data.get('project','')),True))
             if self.path=='/api/research/snapshot': return self.send_json(advanced.snapshot(str(data.get('region','in'))))
             if self.path=='/api/template/capacitor': return self.send_json(advanced.create_capacitor(str(data.get('project','')),data.get('app_name')))
-            if self.path=='/api/test-run': return self.send_json(advanced.test_project(str(data.get('project','')),bool(data.get('repair',False))))
+            if self.path=='/api/test-run':
+                run_npm_tests=data.get('run_npm_tests') is True
+                if run_npm_tests and data.get('approved') is not True:
+                    return self.send_json({'error':'Explicit boolean approval is required before executing project npm scripts.','requires_approval':True},403)
+                return self.send_json(advanced.test_project(str(data.get('project','')),bool(data.get('repair',False)),run_npm_tests=run_npm_tests))
             if self.path=='/api/git': return self.send_json(advanced.git_action(str(data.get('project','')),str(data.get('action','status'))))
             if self.path=='/api/launch': return self.send_json(advanced.launch_config(str(data.get('project','')),data.get('config')))
             if self.path=='/api/track': return self.send_json(advanced.track_event(data.get('project',''),data.get('event','manual'),data.get('value'),data.get('metadata')))
