@@ -168,7 +168,7 @@ class AppForgeAdvancedTests(unittest.TestCase):
             (project / "notes.txt").write_text("credential = 'AKIA1234567890ABCDEF'")
             findings = advanced.checkpoint_secret_findings(project)
             self.assertTrue(findings)
-            self.assertIn("credential-like", findings[0])
+            self.assertIn("possible credential content", findings[0])
 
     def test_git_checkpoint_allows_normal_source_files(self):
         with tempfile.TemporaryDirectory() as tmp:
