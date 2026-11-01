@@ -173,6 +173,7 @@ class Handler(SimpleHTTPRequestHandler):
                 if p.path=='/api/analytics': return self.send_json(advanced.analytics(q.get('project',[''])[0]))
                 if p.path=='/api/launch': return self.send_json(advanced.launch_config(q.get('project',[''])[0]))
                 if p.path=='/api/integrations/aider': return self.send_json(advanced.repo_catalog())
+            except ValueError as e: return self.send_json({'error':str(e),'retryable':False},400)
             except Exception as e: return self.send_json({'error':str(e),'retryable':True},502)
             if p.path=='/api/health':
                 cfg=json.loads(CONFIG.read_text()); self.send_json({'ok':True,'workspace':str(WORKSPACE),'llm_base_url':cfg['llm_base_url'],'llm_model':cfg['llm_model'],'time':int(time.time())}); return
