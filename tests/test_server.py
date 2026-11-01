@@ -334,7 +334,7 @@ class AppForgeHTTPTests(unittest.TestCase):
 
     def test_generated_files_reject_sensitive_filenames(self):
         required = {"index.html": "<html></html>", "app.js": "console.log('ok')", "styles.css": "body{}", "manifest.webmanifest": '{"name":"Demo"}', "sw.js": "self.addEventListener('install',()=>{});"}
-        for sensitive in (".env", ".env.production", "private.pem", "signing.jks", "api-token.json", "credentials.json"):
+        for sensitive in (".env", ".env.production", "private.pem", "signing.jks", "api-token.json", "credentials.json", "google-services.json", "appforge-project.json", "config.local.json"):
             files = {**required, sensitive: "secret"}
             normalized, error = server.validate_generated_files(files)
             self.assertIsNone(normalized, sensitive)
