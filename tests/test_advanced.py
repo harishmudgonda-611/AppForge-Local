@@ -573,9 +573,6 @@ class AppForgeAdvancedTests(unittest.TestCase):
                 advanced.WORKSPACE = old_workspace
 
 
-if __name__ == '__main__':
-    unittest.main(verbosity=2)
-
     def test_local_agent_requires_explicit_boolean_approval(self):
         with tempfile.TemporaryDirectory() as tmp:
             old = advanced.WORKSPACE
@@ -621,3 +618,7 @@ if __name__ == '__main__':
                     self.assertEqual((project/'index.html').read_text(),original)
                 finally:
                     advanced.WORKSPACE, advanced.STATE = old_workspace, old_state
+
+
+if __name__ == '__main__':
+    unittest.main(verbosity=2)
