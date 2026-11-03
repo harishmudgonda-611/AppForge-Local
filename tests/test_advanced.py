@@ -133,7 +133,7 @@ class AppForgeAdvancedTests(unittest.TestCase):
             replica.mkdir()
             (replica / "workflow-state.json").symlink_to(outside)
             advanced.WORKSPACE = root
-            files = {"index.html": "<html></html>", "app.js": "console.log('ok')", "styles.css": "body{}", "manifest.webmanifest": '{"name":"Demo"}', "sw.js": "self.addEventListener('install',()=>{});"}
+            files = {"index.html": "<html></html>", "app.js": "console.log('ok')", "styles.css": "body{}", "manifest.json": '{"name":"Demo"}', "sw.js": "self.addEventListener('install',()=>{});"}
             fake = lambda *args: {"ok": True, "data": {"files": files}, "text": "{}"}
             try:
                 result = advanced.replica_run({"project": "ReplicaStateLink", "stage": "replica-build", "approved": True}, fake)
@@ -155,7 +155,7 @@ class AppForgeAdvancedTests(unittest.TestCase):
             replica.mkdir()
             (replica / "04-build-summary.md").symlink_to(outside)
             advanced.WORKSPACE = root
-            files = {"index.html": "<html></html>", "app.js": "console.log('ok')", "styles.css": "body{}", "manifest.webmanifest": '{"name":"Demo"}', "sw.js": "self.addEventListener('install',()=>{});"}
+            files = {"index.html": "<html></html>", "app.js": "console.log('ok')", "styles.css": "body{}", "manifest.json": '{"name":"Demo"}', "sw.js": "self.addEventListener('install',()=>{});"}
             fake = lambda *args: {"ok": True, "data": {"files": files}, "text": "{}"}
             try:
                 result = advanced.replica_run({"project": "ReplicaSummaryLink", "stage": "replica-build", "approved": True}, fake)
@@ -176,7 +176,7 @@ class AppForgeAdvancedTests(unittest.TestCase):
             (project / "index.html").symlink_to(outside)
             advanced.WORKSPACE = root
             try:
-                files = {"index.html": "<html></html>", "app.js": "console.log('x')", "styles.css": "body{}", "manifest.webmanifest": '{"name":"Demo"}', "sw.js": "self.addEventListener('install',()=>{});"}
+                files = {"index.html": "<html></html>", "app.js": "console.log('x')", "styles.css": "body{}", "manifest.json": '{"name":"Demo"}', "sw.js": "self.addEventListener('install',()=>{});"}
                 fake = lambda *args: {"ok": True, "data": {"files": files}, "text": "{}"}
                 result = advanced.replica_run({"project": "ReplicaFileSymlink", "stage": "replica-build", "approved": True}, fake)
                 self.assertEqual(result["status"], 409)
@@ -202,7 +202,7 @@ class AppForgeAdvancedTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as t:
             advanced.WORKSPACE = Path(t)
             (Path(t)/'ReplicaBuildValid').mkdir()
-            files = {'index.html':'<!doctype html><html><body>App</body></html>', 'app.js':'console.log("ok");', 'styles.css':'body { margin: 0; }', 'manifest.webmanifest':'{"name":"Demo"}', 'sw.js':'self.addEventListener("install",()=>{});', 'README.md':'# Demo'}
+            files = {'index.html':'<!doctype html><html><body>App</body></html>', 'app.js':'console.log("ok");', 'styles.css':'body { margin: 0; }', 'manifest.json':'{"name":"Demo"}', 'sw.js':'self.addEventListener("install",()=>{});', 'README.md':'# Demo'}
             fake = lambda system, user, raw: {'ok':True,'data':{'files':files,'summary':'Generated'},'text':'{}'}
             d = advanced.replica_run({'project':'ReplicaBuildValid','stage':'replica-build','approved':True}, fake)
             self.assertEqual(d['status'], 200)
@@ -215,7 +215,7 @@ class AppForgeAdvancedTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as t:
             advanced.WORKSPACE = Path(t)
             (Path(t)/'ReplicaBadJS').mkdir()
-            files = {'index.html':'<html></html>', 'app.js':'function {', 'styles.css':'body{}', 'manifest.webmanifest':'{"name":"Demo"}', 'sw.js':'self.addEventListener("install",()=>{});'}
+            files = {'index.html':'<html></html>', 'app.js':'function {', 'styles.css':'body{}', 'manifest.json':'{"name":"Demo"}', 'sw.js':'self.addEventListener("install",()=>{});'}
             fake = lambda system, user, raw: {'ok':True,'data':{'files':files},'text':'{}'}
             d = advanced.replica_run({'project':'ReplicaBadJS','stage':'replica-build','approved':True}, fake)
             if advanced.shutil.which('node'):
@@ -609,9 +609,9 @@ class AppForgeAdvancedTests(unittest.TestCase):
             original='<html><body>Original</body></html>'
             (project/'index.html').write_text(original)
             (project/'app.js').write_text('console.log("ok");')
-            (project/'manifest.webmanifest').write_text('{"name":"Demo"}')
+            (project/'manifest.json').write_text('{"name":"Demo"}')
             with patch.object(advanced, 'git_action', return_value={'ok':True}), patch.object(advanced.shutil,'which',return_value=None):
-                fake=lambda *args: {'ok':True,'data':{'files':{'manifest.webmanifest':'{broken json'}},'text':'{}'}
+                fake=lambda *args: {'ok':True,'data':{'files':{'manifest.json':'{broken json'}},'text':'{}'}
                 try:
                     result=advanced.run_local_agent('Demo','Make a focused UI improvement',fake,approved=True)
                     self.assertFalse(result['ok'])
