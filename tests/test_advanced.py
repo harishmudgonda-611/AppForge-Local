@@ -609,8 +609,9 @@ class AppForgeAdvancedTests(unittest.TestCase):
             original='<html><body>Original</body></html>'
             (project/'index.html').write_text(original)
             (project/'app.js').write_text('console.log("ok");')
+            (project/'manifest.webmanifest').write_text('{"name":"Demo"}')
             with patch.object(advanced, 'git_action', return_value={'ok':True}), patch.object(advanced.shutil,'which',return_value=None):
-                fake=lambda *args: {'ok':True,'data':{'files':{'index.html':'<html><broken'}},'text':'{}'}
+                fake=lambda *args: {'ok':True,'data':{'files':{'manifest.webmanifest':'{broken json'}},'text':'{}'}
                 try:
                     result=advanced.run_local_agent('Demo','Make a focused UI improvement',fake,approved=True)
                     self.assertFalse(result['ok'])
