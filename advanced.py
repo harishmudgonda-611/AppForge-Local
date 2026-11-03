@@ -713,3 +713,115 @@ def repair_project(project_name, approved=False):
         return {'ok':True,'rolled_back':False,'before':first,'after':after,'changed_files':applied,'explanation':patch.get('explanation',''),'message':'One approved repair attempt passed the available checks. Review the Git diff before release.'}
     except Exception as e:
         return {'ok':False,'error':'Repair attempt failed: '+str(e),'before':first,'message':'No automatic claim of success. Inspect the project and test report.'}
+
+
+def run_local_agent(project_name, prompt, llm_fn, approved=False):
+    """Apply one bounded local-model patch, then validate and restore on regression.
+
+    This is deliberately not a shell agent: it only edits a small allowlist of
+    existing text files and runs AppForge's static project checks. Package scripts,
+    network commands, APK builds and new files are outside this endpoint.
+    """
+    if approved is not True:
+        raise ValueError('Explicit boolean approval is required before the local agent can modify files.')
+    if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_-]{0,63}', project_name or ''):
+        raise ValueError('Invalid project slug')
+    if not isinstance(prompt, str) or not 10 <= len(prompt.strip()) <= 4000:
+        raise ValueError('Provide a focused task between 10 and 4000 characters.')
+    if (WORKSPACE / project_name).is_symlink():
+        raise ValueError('Project workspace entries cannot be symlinks.')
+    project = (WORKSPACE / project_name).resolve()
+    if project.parent != WORKSPACE.resolve() or not project.is_dir():
+        raise ValueError('Project not found')
+    cfg_path = ROOT / 'config.local.json'
+    if cfg_path.is_symlink() or not cfg_path.is_file():
+        raise ValueError('Local AI configuration must be a regular file.')
+    cfg = json.loads(cfg_path.read_text(encoding='utf-8'))
+    if not local_endpoint_allowed(cfg.get('llm_base_url', '')):
+        return {'ok':False,'error':'Local-first policy: agent requires a localhost or private-LAN model endpoint.'}
+    # The project checkpoint's secret scan runs before any model-generated edits.
+    checkpoint = git_action(project_name, 'checkpoint')
+    if not checkpoint.get('ok'):
+        return {'ok':False,'error':'Git checkpoint failed; no agent changes were applied.','checkpoint':checkpoint}
+    allowed = ('index.html','app.js','styles.css','manifest.webmanifest','sw.js',
+               'package.json','capacitor.config.json')
+    files = {}
+    originals = {}
+    for rel in allowed:
+        path = project / rel
+        if path.is_symlink():
+            return {'ok':False,'error':'Refusing to inspect a symlinked project file: '+rel}
+        if path.exists():
+            if not path.is_file() or path.stat().st_size > 100000:
+                continue
+            try:
+                content = path.read_text(encoding='utf-8')
+            except (OSError, UnicodeError):
+                continue
+            files[rel] = content
+            originals[rel] = content
+    if not files:
+        return {'ok':False,'error':'No existing supported source files were found.'}
+    system = ('You are AppForge Local’s coding agent. Return ONLY a JSON object with '
+              'keys files (mapping existing relative paths to complete replacement text) '
+              'and explanation. Modify only files in the supplied map. Do not add files, '
+              'dependencies, network calls, credentials, shell commands, obfuscation, or '
+              'unrelated features. Preserve existing behavior unless the task asks otherwise. '
+              'If the task is unclear or unsafe, return files as an empty object.')
+    user = json.dumps({'task':prompt,'existing_files':files},ensure_ascii=False)[:24000]
+    try:
+        result = llm_fn(system,user,True)
+        if not result or not result.get('ok'):
+            return {'ok':False,'error':'Local model request failed. No source files changed.','detail':(result or {}).get('error','')}
+        obj = result.get('data')
+        if not isinstance(obj,dict):
+            obj = extract_model_json(result.get('text','')) or {}
+        patch = obj.get('files')
+        if not isinstance(patch,dict) or not patch:
+            return {'ok':False,'error':'Model returned no usable file patch. No source files changed.','explanation':str(obj.get('explanation',''))[:2000]}
+        if len(patch)>len(allowed):
+            return {'ok':False,'error':'Patch contains too many files. No source files changed.'}
+        normalized={}
+        for rel,content in patch.items():
+            if rel not in files or not isinstance(content,str) or len(content.encode('utf-8'))>200000:
+                return {'ok':False,'error':'Patch includes an unsupported path, new file, or oversized content. No source files changed.'}
+            normalized[rel]=content
+        # Recheck all target paths immediately before writing and use replace() so
+        # each individual file is never left half-written.
+        changed=[]
+        for rel,content in normalized.items():
+            target=project/rel
+            if target.is_symlink() or not target.is_file() or target.resolve().parent != project.resolve():
+                for name in changed:
+                    (project/name).write_text(originals[name],encoding='utf-8')
+                return {'ok':False,'error':'Target changed or became unsafe; previous edits were restored.'}
+            temp=None
+            try:
+                with tempfile.NamedTemporaryFile('w',encoding='utf-8',dir=str(project),prefix='.appforge-agent-',delete=False) as handle:
+                    temp=Path(handle.name); handle.write(content); handle.flush(); os.fsync(handle.fileno())
+                if target.is_symlink() or target.resolve().parent != project.resolve():
+                    raise ValueError('Target changed during patch application')
+                os.replace(str(temp),str(target))
+                changed.append(rel)
+            except Exception:
+                if temp:
+                    try: temp.unlink()
+                    except OSError: pass
+                for name in changed:
+                    (project/name).write_text(originals[name],encoding='utf-8')
+                return {'ok':False,'error':'Patch write failed; prior file contents were restored.'}
+        after = test_project(project_name)
+        if not after.get('ok'):
+            for rel in changed:
+                target=project/rel
+                if target.is_symlink():
+                    return {'ok':False,'rolled_back':False,'error':'Validation failed and rollback target became unsafe. Manual review required.','after':after}
+                target.write_text(originals[rel],encoding='utf-8')
+            restored = test_project(project_name)
+            return {'ok':False,'rolled_back':True,'changed_files':changed,'before':None,'after':after,
+                    'rollback_validation':restored,'message':'Static checks failed; original source contents were restored.'}
+        return {'ok':True,'rolled_back':False,'changed_files':changed,'after':after,
+                'explanation':str(obj.get('explanation',''))[:3000],
+                'message':'One local-agent patch passed AppForge static checks. Review the Git diff; this did not execute package scripts or build an APK.'}
+    except Exception as exc:
+        return {'ok':False,'error':'Local agent failed: '+str(exc),'message':'No success is claimed; inspect project status and files.'}
