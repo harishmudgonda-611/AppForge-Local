@@ -575,3 +575,49 @@ class AppForgeAdvancedTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)
+
+    def test_local_agent_requires_explicit_boolean_approval(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            old = advanced.WORKSPACE
+            advanced.WORKSPACE = Path(tmp)
+            (Path(tmp) / 'Demo').mkdir()
+            try:
+                with self.assertRaisesRegex(ValueError, 'Explicit boolean approval'):
+                    advanced.run_local_agent('Demo', 'Make a focused change', lambda *a: {}, approved='yes')
+            finally:
+                advanced.WORKSPACE = old
+
+    def test_local_agent_rejects_new_or_unsupported_paths_before_writing(self):
+        old_workspace, old_state = advanced.WORKSPACE, advanced.STATE
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp); project=root/'Demo'; project.mkdir(); state=root/'state'; state.mkdir()
+            advanced.WORKSPACE, advanced.STATE = root, state
+            (project/'index.html').write_text('<html></html>')
+            (project/'app.js').write_text('console.log("original");')
+            # A fake checkpoint avoids depending on host Git in this unit test.
+            with patch.object(advanced, 'git_action', return_value={'ok':True}):
+                fake=lambda *args: {'ok':True,'data':{'files':{'../outside.txt':'bad'}},'text':'{}'}
+                try:
+                    result=advanced.run_local_agent('Demo','Change the app safely',fake,approved=True)
+                    self.assertFalse(result['ok'])
+                    self.assertEqual((project/'app.js').read_text(),'console.log("original");')
+                finally:
+                    advanced.WORKSPACE, advanced.STATE = old_workspace, old_state
+
+    def test_local_agent_restores_original_files_when_static_validation_fails(self):
+        old_workspace, old_state = advanced.WORKSPACE, advanced.STATE
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp); project=root/'Demo'; project.mkdir(); state=root/'state'; state.mkdir()
+            advanced.WORKSPACE, advanced.STATE = root, state
+            original='<html><body>Original</body></html>'
+            (project/'index.html').write_text(original)
+            (project/'app.js').write_text('console.log("ok");')
+            with patch.object(advanced, 'git_action', return_value={'ok':True}), patch.object(advanced.shutil,'which',return_value=None):
+                fake=lambda *args: {'ok':True,'data':{'files':{'index.html':'<html><broken'}},'text':'{}'}
+                try:
+                    result=advanced.run_local_agent('Demo','Make a focused UI improvement',fake,approved=True)
+                    self.assertFalse(result['ok'])
+                    self.assertTrue(result.get('rolled_back'))
+                    self.assertEqual((project/'index.html').read_text(),original)
+                finally:
+                    advanced.WORKSPACE, advanced.STATE = old_workspace, old_state
