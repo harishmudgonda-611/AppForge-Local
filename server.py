@@ -410,6 +410,10 @@ class Handler(SimpleHTTPRequestHandler):
                 return self.send_json(result['body'],result.get('status',200))
             if self.path in ('/api/aider/run','/api/test-repair') and data.get('approved') is not True:
                 return self.send_json({'error':'Explicit boolean approval is required for this operation.','requires_approval':True},403)
+            if self.path=='/api/local-agent/run':
+                if data.get('approved') is not True:
+                    return self.send_json({'error':'Explicit boolean approval is required for local-agent file edits.','requires_approval':True},403)
+                return self.send_json(advanced.run_local_agent(str(data.get('project','')),str(data.get('prompt','')),self.call_llm_data,True))
             if self.path=='/api/aider/run': return self.send_json(advanced.run_aider(str(data.get('project','')),str(data.get('prompt','')),True))
             if self.path=='/api/test-repair': return self.send_json(advanced.repair_project(str(data.get('project','')),True))
             if self.path=='/api/research/snapshot': return self.send_json(advanced.snapshot(str(data.get('region','in'))))

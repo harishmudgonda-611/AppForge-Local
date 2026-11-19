@@ -73,6 +73,13 @@ class AppForgeHTTPTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "too large"):
             handler.body()
 
+    def test_local_agent_endpoint_requires_explicit_boolean_approval(self):
+        status, data = self.post_json('/api/local-agent/run', {
+            'project':'Demo', 'prompt':'Make a focused code change', 'approved':'yes'
+        })
+        self.assertEqual(status,403)
+        self.assertTrue(data['requires_approval'])
+
     def test_aider_and_repair_require_boolean_approval(self):
         for path, payload in (
             ("/api/aider/run", {"project": "Demo", "prompt": "Make a focused change", "approved": "false"}),
