@@ -440,20 +440,20 @@ class Handler(SimpleHTTPRequestHandler):
                     if not task:return self.send_json({'error':'Describe the app opportunity or market to research.'},400)
                     steps=[{'id':s['id'],'title':s['title'],'status':'pending','result':None,'error':None} for s in agents.WORKFLOW_STEPS]
                     run=advanced.workflow_create(str(data.get('name','Opportunity research')),task,steps)
-                    accumulated='Initial brief:\\n'+task
+                    accumulated='Initial brief:\n'+task
                     research_ids=['market-scout','competitor-analyst','user-pain-researcher','opportunity-analyst']
                     for agent_id in research_ids:
                         role=agents.get_agent(agent_id)
                         step=next(x for x in run['steps'] if x['id']==agent_id)
                         step['status']='running'
                         run=advanced.workflow_update(run['id'],run['steps'],'running')
-                        result=self.call_llm_data(role['system'],'TASK:\\nAnalyze the brief using only provided evidence. Return findings, evidence, assumptions and gaps.\\n\\nCONTEXT:\\n'+accumulated,False)
+                        result=self.call_llm_data(role['system'],'TASK:\nAnalyze the brief using only provided evidence. Return findings, evidence, assumptions and gaps.\n\nCONTEXT:\n'+accumulated,False)
                         if not result or not result.get('ok'):
                             step['status']='failed';step['error']=(result or {}).get('error','Local model failed')
                             run=advanced.workflow_update(run['id'],run['steps'],'failed')
                             return self.send_json({'workflow':run,'error':step['error']},502)
                         step['status']='completed';step['result']=result.get('text','')
-                        accumulated+='\\n\\n'+role['name']+' findings:\\n'+step['result'][:9000]
+                        accumulated+='\n\n'+role['name']+' findings:\n'+step['result'][:9000]
                         run=advanced.workflow_update(run['id'],run['steps'],'awaiting_approval')
                     return self.send_json({'workflow':run,'approval_required':True,'message':'Research completed. Review evidence and explicitly approve architecture before the next stage.'})
                 if action=='approve':
@@ -465,9 +465,9 @@ class Handler(SimpleHTTPRequestHandler):
                     step=next(x for x in run['steps'] if x['id']=='product-architect')
                     step['status']='running'
                     run=advanced.workflow_update(wid,run['steps'],'running',approved=True)
-                    context='\\n\\n'.join(x['title']+':\\n'+str(x.get('result') or '') for x in run['steps'] if x.get('result'))
+                    context='\n\n'.join(x['title']+':\n'+str(x.get('result') or '') for x in run['steps'] if x.get('result'))
                     role=agents.get_agent('product-architect')
-                    result=self.call_llm_data(role['system'],'Create a practical MVP architecture based on the approved opportunity. Include acceptance criteria, scope, data model, local-first architecture, risks and validation plan.\\n\\nBRIEF:\\n'+run['input_text']+'\\n\\nRESEARCH:\\n'+context,False)
+                    result=self.call_llm_data(role['system'],'Create a practical MVP architecture based on the approved opportunity. Include acceptance criteria, scope, data model, local-first architecture, risks and validation plan.\n\nBRIEF:\n'+run['input_text']+'\n\nRESEARCH:\n'+context,False)
                     if not result or not result.get('ok'):
                         step['status']='failed';step['error']=(result or {}).get('error','Local model failed')
                         run=advanced.workflow_update(wid,run['steps'],'failed',approved=True)
