@@ -122,7 +122,10 @@ def generate_split_source_files(call_model, slug, brief):
     for filename, instruction in prompts.items():
         response = call_model(
             "You are a senior frontend engineer. Return only the requested complete source file. Do not use Markdown fences.",
-            "App slug: " + str(slug) + "\nApp brief:\n" + str(brief) + "\nTask: " + instruction,
+            "App slug: " + str(slug) + "
+App brief:
+" + str(brief) + "
+Task: " + instruction,
             False
         )
         if not response or not response.get("ok") or not isinstance(response.get("text"), str):
@@ -135,7 +138,8 @@ def generate_split_source_files(call_model, slug, brief):
                 lines = lines[1:]
             if lines and lines[-1].strip() == fence:
                 lines = lines[:-1]
-            content = "\n".join(lines).strip()
+            content = "
+".join(lines).strip()
         if len(content) < 80:
             return {}, "Local model returned too little source for " + filename + "."
         files[filename] = content
@@ -145,7 +149,10 @@ def generate_split_source_files(call_model, slug, brief):
         "background_color": "#101827", "theme_color": "#101827", "icons": []
     }, indent=2)
     files["sw.js"] = "const CACHE='appforge-v1';self.addEventListener('install',e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(['./','./index.html','./styles.css','./app.js','./manifest.webmanifest']))));self.addEventListener('fetch',e=>{if(e.request.method==='GET')e.respondWith(caches.match(e.request).then(r=>r||fetch(e.request)));});"
-    files["README.md"] = "# " + str(slug) + "\n\nGenerated locally by AppForge. Review and test before release.\n"
+    files["README.md"] = "# " + str(slug) + "
+
+Generated locally by AppForge. Review and test before release.
+"
     return files, None
 
 
@@ -287,7 +294,8 @@ class Handler(SimpleHTTPRequestHandler):
         if p.path.startswith('/api/'):
             try:
                 q=parse_qs(p.query)
-                if p.path=='/api/opportunities': return self.send_json(opportunity_radar.list_opportunities())\n                if p.path=='/api/research/search': return self.send_json(advanced.research_search(q.get('term',[''])[0],q.get('region',['in'])[0],q.get('limit',['25'])[0]))
+                if p.path=='/api/opportunities': return self.send_json(opportunity_radar.list_opportunities())
+                if p.path=='/api/research/search': return self.send_json(advanced.research_search(q.get('term',[''])[0],q.get('region',['in'])[0],q.get('limit',['25'])[0]))
                 if p.path=='/api/research/history': return self.send_json(advanced.history(q.get('app_id',[''])[0],q.get('limit',['30'])[0]))
                 if p.path=='/api/research/reviews':
                     result=advanced.reviews(q.get('app_id',[''])[0],q.get('region',['us'])[0],q.get('limit',['25'])[0]); ratings=[r['rating'] for r in result['reviews'] if r['rating']]; result['rating_summary']={'count':len(ratings),'average':round(sum(ratings)/len(ratings),2) if ratings else None,'positive_4_5':sum(1 for r in ratings if r>=4),'negative_1_2':sum(1 for r in ratings if r<=2)}; return self.send_json(result)
@@ -405,7 +413,10 @@ class Handler(SimpleHTTPRequestHandler):
         try: data=self.body()
         except Exception as e: return self.send_json({'error':str(e)},400)
         try:
-            if self.path=='/api/opportunities':\n                if data.get('action')=='delete': return self.send_json(opportunity_radar.delete_opportunity(data.get('id')))\n                return self.send_json(opportunity_radar.save_opportunity(data))\n            if self.path=='/api/replica/run':
+            if self.path=='/api/opportunities':
+                if data.get('action')=='delete': return self.send_json(opportunity_radar.delete_opportunity(data.get('id')))
+                return self.send_json(opportunity_radar.save_opportunity(data))
+            if self.path=='/api/replica/run':
                 result=advanced.replica_run(data,self.call_llm_data)
                 return self.send_json(result['body'],result.get('status',200))
             if self.path in ('/api/aider/run','/api/test-repair') and data.get('approved') is not True:
@@ -432,7 +443,8 @@ class Handler(SimpleHTTPRequestHandler):
         if self.path=='/api/feedback':
             if not isinstance(data.get('feedback'),str) or not data['feedback'].strip(): return self.send_json({'error':'Feedback text is required.'},400)
             entry={'time':int(time.time()),'feedback':data['feedback'].strip()[:4000],'kind':str(data.get('kind','general'))[:40]}
-            with FEEDBACK.open('a',encoding='utf-8') as f: f.write(json.dumps(entry,ensure_ascii=False)+'\n')
+            with FEEDBACK.open('a',encoding='utf-8') as f: f.write(json.dumps(entry,ensure_ascii=False)+'
+')
             return self.send_json({'ok':True,'message':'Feedback saved locally for future improvement reviews.'})
         if self.path=='/api/evolve':
             cfg=json.loads(CONFIG.read_text())
@@ -449,7 +461,8 @@ class Handler(SimpleHTTPRequestHandler):
                     except Exception: pass
             context={'projects':projects[-20:],'feedback':feedback,'current_features':['Apple top-free chart snapshot','AI gap analysis','AI code generation','basic file checks','local project workspace']}
             system='You are the principal engineer for a locally hosted app research/build tool. Propose safe, incremental self-improvements based on evidence. Never claim a test passed unless data proves it. Never recommend copying proprietary app code. Return: (1) top 5 prioritized improvements with impact/effort/confidence, (2) tests and acceptance criteria, (3) risks, (4) what must be approved by the owner. Do not modify files; this is a proposal only.'
-            user='Review this current local state and suggest the next version roadmap. Distinguish evidence from hypotheses.\n'+json.dumps(context,ensure_ascii=False)[:18000]
+            user='Review this current local state and suggest the next version roadmap. Distinguish evidence from hypotheses.
+'+json.dumps(context,ensure_ascii=False)[:18000]
             return self.call_llm(system,user)
         if self.path=='/api/analyze':
             prompt=data.get('prompt','')
