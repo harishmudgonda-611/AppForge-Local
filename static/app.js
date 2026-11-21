@@ -14,8 +14,7 @@ $('#generate-app').onclick=async()=>{const out=$('#build-output'),state=$('#buil
 Folder: workspace/${d.project}
 
 Files generated:
-${d.files.map(x=>'• '+x).join('
-')}
+${d.files.map(x=>'• '+x).join('\\n')}
 
 Description:
 ${d.description}
