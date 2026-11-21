@@ -1,6 +1,6 @@
 """AppForge Local free-source opportunity radar and locally stored idea shortlist."""
 from pathlib import Path
-import sqlite3, time
+import sqlite3, time\nfrom urllib.parse import urlparse
 
 ROOT = Path(__file__).resolve().parent
 STATE = ROOT / "state"
@@ -69,9 +69,9 @@ def save_opportunity(data):
         fields[key]=value
     status=data.get("status","research")
     if status not in ("research","validate","build","rejected","launched"): status="research"
-    now=int(time.time())
+    source_url=_clean_text(data.get("source_url"),1000)\n    if source_url and urlparse(source_url).scheme not in ("http","https"):\n        raise ValueError("Source URL must use http or https.")\n    now=int(time.time())
     values=(title,_clean_text(data.get("problem"),2000),_clean_text(data.get("audience"),500),
-      _clean_text(data.get("source_name"),120),_clean_text(data.get("source_url"),1000),
+      _clean_text(data.get("source_name"),120),source_url,
       _clean_text(data.get("evidence"),4000),_clean_text(data.get("revenue_note"),1000),
       _clean_text(data.get("launch_age"),120),fields["demand"],fields["revenue"],fields["gap"],
       fields["build_ease"],fields["monetization"],fields["fit"],status,now,now)
