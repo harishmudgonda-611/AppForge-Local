@@ -293,6 +293,7 @@ def db():
     c.execute('''CREATE INDEX IF NOT EXISTS idx_apps_history ON apps(app_id, collected_at)''')
     c.execute('''CREATE TABLE IF NOT EXISTS reviews (id INTEGER PRIMARY KEY, app_id TEXT, review_id TEXT, title TEXT, body TEXT, rating INTEGER, author TEXT, source_url TEXT, collected_at INTEGER, UNIQUE(app_id, review_id))''')
     c.execute('''CREATE TABLE IF NOT EXISTS opportunities (id INTEGER PRIMARY KEY, app_name TEXT NOT NULL, source_url TEXT, source_name TEXT, category TEXT, revenue_usd_monthly REAL, launch_date TEXT, growth_signal TEXT, pain_points TEXT, differentiator TEXT, build_difficulty INTEGER, operating_cost INTEGER, notes TEXT, created_at INTEGER)''')
+    c.execute('''CREATE TABLE IF NOT EXISTS agent_workflows (id INTEGER PRIMARY KEY, name TEXT NOT NULL, input_text TEXT NOT NULL, status TEXT NOT NULL, approved INTEGER NOT NULL DEFAULT 0, steps_json TEXT NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)''')
     c.execute('''CREATE TABLE IF NOT EXISTS events (id INTEGER PRIMARY KEY, project TEXT, event TEXT, value REAL, metadata TEXT, created_at INTEGER)''')
     c.execute('''CREATE TABLE IF NOT EXISTS launch_config (project TEXT PRIMARY KEY, config TEXT, updated_at INTEGER)''')
     c.commit(); return c
@@ -787,3 +788,27 @@ def repair_project(project_name, approved=False):
         return {'ok':True,'rolled_back':False,'before':first,'after':after,'changed_files':applied,'explanation':patch.get('explanation',''),'message':'One approved repair attempt passed the available checks. Review the Git diff before release.'}
     except Exception as e:
         return {'ok':False,'error':'Repair attempt failed: '+str(e),'before':first,'message':'No automatic claim of success. Inspect the project and test report.'}
+
+def workflow_create(name, input_text, steps):
+    name=str(name or "Opportunity research")[:160].strip() or "Opportunity research"
+    input_text=str(input_text or "").strip()[:12000]
+    if not input_text: raise ValueError("Workflow input is required.")
+    now=int(time.time())
+    c=db()
+    c.execute("INSERT INTO agent_workflows(name,input_text,status,approved,steps_json,created_at,updated_at) VALUES(?,?,?,?,?,?,?)",(name,input_text,"running",0,json.dumps(steps,ensure_ascii=False),now,now))
+    wid=c.execute("SELECT last_insert_rowid()").fetchone()[0]
+    c.commit();c.close()
+    return workflow_get(wid)
+def workflow_get(wid):
+    c=db();row=c.execute("SELECT * FROM agent_workflows WHERE id=?",(int(wid),)).fetchone();c.close()
+    if not row:return None
+    d=dict(row);d["steps"]=json.loads(d.pop("steps_json"));return d
+def workflow_update(wid,steps,status=None,approved=None):
+    c=db();row=c.execute("SELECT status,approved FROM agent_workflows WHERE id=?",(int(wid),)).fetchone()
+    if not row:c.close();return None
+    c.execute("UPDATE agent_workflows SET steps_json=?,status=?,approved=?,updated_at=? WHERE id=?",(json.dumps(steps,ensure_ascii=False),status or row["status"],int(row["approved"] if approved is None else approved),int(time.time()),int(wid)))
+    c.commit();c.close();return workflow_get(wid)
+def workflow_list(limit=20):
+    c=db();rows=[dict(r) for r in c.execute("SELECT * FROM agent_workflows ORDER BY updated_at DESC LIMIT ?",(max(1,min(100,int(limit))),))];c.close()
+    for d in rows:d["steps"]=json.loads(d.pop("steps_json"))
+    return {"workflows":rows}

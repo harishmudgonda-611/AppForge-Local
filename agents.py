@@ -20,3 +20,27 @@ def get_agent(agent_id):
  for role in AGENT_ROLES:
   if role["id"]==agent_id:return role
  return None
+
+
+WORKFLOW_STEPS = [
+ {"id":"market-scout","agent_id":"market-scout","title":"Market discovery"},
+ {"id":"competitor-analyst","agent_id":"competitor-analyst","title":"Competitor analysis"},
+ {"id":"user-pain-researcher","agent_id":"user-pain-researcher","title":"User pain analysis"},
+ {"id":"opportunity-analyst","agent_id":"opportunity-analyst","title":"Opportunity ranking"},
+ {"id":"approval","agent_id":None,"title":"Owner approval gate"},
+ {"id":"product-architect","agent_id":"product-architect","title":"MVP architecture"},
+]
+def workflow_plan():
+ return {"steps":[dict(s) for s in WORKFLOW_STEPS],"approval_required_before":"product-architect","execution":"Sequential roles share one configured local model. Research steps are advisory; architecture requires explicit owner approval."}
+def workflow_next_step(completed_ids, approved=False):
+ completed=set(completed_ids or [])
+ for step in WORKFLOW_STEPS:
+  if step["id"] not in completed:
+   if step["id"]=="approval":
+    return {"id":"approval","blocked":True,"reason":"Owner approval is required before architecture generation."}
+   if step["id"]=="product-architect" and not approved:
+    return {"id":"approval","blocked":True,"reason":"Owner approval is required before architecture generation."}
+   return {"id":step["id"],"blocked":False}
+ return {"id":None,"blocked":False,"complete":True}
+def workflow_approval_valid(value):
+ return value is True

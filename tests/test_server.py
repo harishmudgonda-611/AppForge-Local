@@ -243,7 +243,10 @@ class AppForgeHTTPTests(unittest.TestCase):
         element_ids = set(re.findall(r'id="([^"]+)"', html))
         selectors = set(re.findall(r"\$\('#([^']+)'\)", script))
         self.assertTrue(selectors)
-        self.assertEqual(selectors - element_ids, set())
+        dynamic_ids = {"workflow-approve", "workflow-reject"}
+        for dynamic_id in dynamic_ids:
+            self.assertIn('id="' + dynamic_id + '"', script)
+        self.assertEqual(selectors - element_ids - dynamic_ids, set())
 
     def test_service_worker_precache_assets_exist(self):
         import re
