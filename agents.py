@@ -36,6 +36,8 @@ def workflow_next_step(completed_ids, approved=False):
  completed=set(completed_ids or [])
  for step in WORKFLOW_STEPS:
   if step["id"] not in completed:
+   if step["id"]=="approval":
+    return {"id":"approval","blocked":True,"reason":"Owner approval is required before architecture generation."}
    if step["id"]=="product-architect" and not approved:
     return {"id":"approval","blocked":True,"reason":"Owner approval is required before architecture generation."}
    return {"id":step["id"],"blocked":False}
