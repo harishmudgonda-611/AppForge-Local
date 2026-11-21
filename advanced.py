@@ -375,19 +375,22 @@ def reviews(app_id, country='us', limit=25):
     c.commit(); c.close()
     return {'app_id':str(app_id),'source_url':url,'collected_at':now,'reviews':out,'note':'Public RSS availability varies; no reviews does not mean no complaints.'}
 
+def opportunity_is_recent(record):
+    launch=str(record.get('launch_date') or '')
+    try:
+        from datetime import date
+        d=date.fromisoformat(launch)
+        months=(date.today().year-d.year)*12+date.today().month-d.month
+        return 0 <= months <= 12
+    except (ValueError,TypeError):
+        return False
+
 def opportunity_score(record):
     """Deterministic 100-point score; estimated revenue is user-entered evidence, never inferred."""
     revenue = record.get("revenue_usd_monthly")
     try: revenue = float(revenue) if revenue not in (None, "") else None
     except (TypeError, ValueError): revenue = None
-    launch = str(record.get("launch_date") or "")
-    recent = False
-    if launch:
-        try:
-            from datetime import date
-            months = (date.today().year-int(launch[:4]))*12 + date.today().month-int(launch[5:7])
-            recent = 0 <= months <= 12
-        except Exception: recent = False
+    recent = opportunity_is_recent(record)
     growth = str(record.get("growth_signal") or "").lower()
     difficulty = max(1,min(5,int(record.get("build_difficulty") or 3)))
     operating = max(1,min(5,int(record.get("operating_cost") or 3)))
@@ -411,7 +414,7 @@ def opportunity_list(filters=None):
     if filters.get("min_revenue"):
         rows=[r for r in rows if (r.get("revenue_usd_monthly") or 0)>=float(filters["min_revenue"])]
     if filters.get("recent_only"):
-        rows=[r for r in rows if r.get("launch_date") and opportunity_score({**r,"revenue_usd_monthly":0})>=15]
+        rows=[r for r in rows if opportunity_is_recent(r)]
     if filters.get("category"):
         q=str(filters["category"]).lower()
         rows=[r for r in rows if q in str(r.get("category") or "").lower()]
