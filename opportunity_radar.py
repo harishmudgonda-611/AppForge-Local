@@ -1,6 +1,7 @@
 """AppForge Local free-source opportunity radar and locally stored idea shortlist."""
 from pathlib import Path
-import sqlite3, time\nfrom urllib.parse import urlparse
+import sqlite3, time
+from urllib.parse import urlparse
 
 ROOT = Path(__file__).resolve().parent
 STATE = ROOT / "state"
