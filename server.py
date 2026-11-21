@@ -4,7 +4,7 @@ from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
 from pathlib import Path
 import json, os, urllib.request, urllib.error, re, subprocess, threading, time, ipaddress, shutil, tempfile
-import advanced
+import advanced, opportunity_radar
 
 ROOT = Path(__file__).resolve().parent
 STATIC = ROOT / 'static'
@@ -287,7 +287,7 @@ class Handler(SimpleHTTPRequestHandler):
         if p.path.startswith('/api/'):
             try:
                 q=parse_qs(p.query)
-                if p.path=='/api/research/search': return self.send_json(advanced.research_search(q.get('term',[''])[0],q.get('region',['in'])[0],q.get('limit',['25'])[0]))
+                if p.path=='/api/opportunities': return self.send_json(opportunity_radar.list_opportunities())\n                if p.path=='/api/research/search': return self.send_json(advanced.research_search(q.get('term',[''])[0],q.get('region',['in'])[0],q.get('limit',['25'])[0]))
                 if p.path=='/api/research/history': return self.send_json(advanced.history(q.get('app_id',[''])[0],q.get('limit',['30'])[0]))
                 if p.path=='/api/research/reviews':
                     result=advanced.reviews(q.get('app_id',[''])[0],q.get('region',['us'])[0],q.get('limit',['25'])[0]); ratings=[r['rating'] for r in result['reviews'] if r['rating']]; result['rating_summary']={'count':len(ratings),'average':round(sum(ratings)/len(ratings),2) if ratings else None,'positive_4_5':sum(1 for r in ratings if r>=4),'negative_1_2':sum(1 for r in ratings if r<=2)}; return self.send_json(result)
@@ -405,7 +405,7 @@ class Handler(SimpleHTTPRequestHandler):
         try: data=self.body()
         except Exception as e: return self.send_json({'error':str(e)},400)
         try:
-            if self.path=='/api/replica/run':
+            if self.path=='/api/opportunities':\n                if data.get('action')=='delete': return self.send_json(opportunity_radar.delete_opportunity(data.get('id')))\n                return self.send_json(opportunity_radar.save_opportunity(data))\n            if self.path=='/api/replica/run':
                 result=advanced.replica_run(data,self.call_llm_data)
                 return self.send_json(result['body'],result.get('status',200))
             if self.path in ('/api/aider/run','/api/test-repair') and data.get('approved') is not True:
