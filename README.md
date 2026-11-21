@@ -12,6 +12,7 @@
 - Local SQLite research history, review-feed collection where available, and manually recorded local analytics.
 - Opportunity Radar: manually evidence-backed shortlist, revenue/recent-launch filters and transparent heuristic scoring.
 - Agent Lab: specialized role prompts (market scout, competitor analyst, user-pain researcher, opportunity analyst, architect, UI/UX, developer, QA, repair, release reviewer) executed sequentially through the configured local model.
+- Coordinated Agent Workflow: sequential market, competitor, user-pain and opportunity research; SQLite-persisted runs; explicit owner approval before Product Architect; no automatic code generation.
 - Static project checks (no package scripts execute by default), owner-approved repair workflows, and Git checkpoints.
 - An 11-stage Replica-inspired workflow adapter for research, architecture, design, build, test planning and release preflight.
 - A Capacitor Android scaffold. It does **not** mean an APK has been built or is ready for Play Store release.
