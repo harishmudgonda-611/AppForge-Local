@@ -517,8 +517,15 @@ class Handler(SimpleHTTPRequestHandler):
                     except OSError: pass
                     return self.send_json({'ok':False,'error':'The model did not return a usable file map and split generation failed.','detail':split_error,'project':name},502)
                 obj.setdefault('build_notes','Source files generated in separate local model calls because structured JSON was unavailable.')
-            model_files = inject_appforge_intro(model_files)
             files, file_error = validate_generated_files(model_files)
+            if file_error:
+                for child in project.iterdir():
+                    if child.is_file() or child.is_symlink(): child.unlink()
+                    elif child.is_dir(): import shutil; shutil.rmtree(child)
+                project.rmdir()
+                return self.send_json({'ok':False,'error':file_error,'project':name},422)
+            files = inject_appforge_intro(files)
+            files, file_error = validate_generated_files(files)
             if file_error:
                 for child in project.iterdir():
                     if child.is_file() or child.is_symlink(): child.unlink()
