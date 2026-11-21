@@ -309,6 +309,11 @@ class Handler(SimpleHTTPRequestHandler):
             try:
                 q=parse_qs(p.query)
                 if p.path=='/api/agents': return self.send_json(agents.list_agents())
+                if p.path=='/api/agents/workflows': return self.send_json(advanced.workflow_list(q.get('limit',['20'])[0]))
+                if p.path=='/api/agents/workflow':
+                    wid=q.get('id',[''])[0]
+                    item=advanced.workflow_get(wid) if wid else None
+                    return self.send_json(item or {'error':'Workflow not found'},200 if item else 404)
                 if p.path=='/api/opportunities': return self.send_json(advanced.opportunity_list({'min_revenue':q.get('min_revenue',[''])[0],'recent_only':q.get('recent_only',[''])[0]=='1','category':q.get('category',[''])[0]}))
                 if p.path=='/api/research/search': return self.send_json(advanced.research_search(q.get('term',[''])[0],q.get('region',['in'])[0],q.get('limit',['25'])[0]))
                 if p.path=='/api/research/history': return self.send_json(advanced.history(q.get('app_id',[''])[0],q.get('limit',['30'])[0]))
@@ -428,6 +433,55 @@ class Handler(SimpleHTTPRequestHandler):
         try: data=self.body()
         except Exception as e: return self.send_json({'error':str(e)},400)
         try:
+            if self.path=='/api/agents/workflow':
+                action=str(data.get('action','start'))
+                if action=='start':
+                    task=str(data.get('task','')).strip()[:12000]
+                    if not task:return self.send_json({'error':'Describe the app opportunity or market to research.'},400)
+                    steps=[{'id':s['id'],'title':s['title'],'status':'pending','result':None,'error':None} for s in agents.WORKFLOW_STEPS]
+                    run=advanced.workflow_create(str(data.get('name','Opportunity research')),task,steps)
+                    accumulated='Initial brief:\\n'+task
+                    research_ids=['market-scout','competitor-analyst','user-pain-researcher','opportunity-analyst']
+                    for agent_id in research_ids:
+                        role=agents.get_agent(agent_id)
+                        step=next(x for x in run['steps'] if x['id']==agent_id)
+                        step['status']='running'
+                        run=advanced.workflow_update(run['id'],run['steps'],'running')
+                        result=self.call_llm_data(role['system'],'TASK:\\nAnalyze the brief using only provided evidence. Return findings, evidence, assumptions and gaps.\\n\\nCONTEXT:\\n'+accumulated,False)
+                        if not result or not result.get('ok'):
+                            step['status']='failed';step['error']=(result or {}).get('error','Local model failed')
+                            run=advanced.workflow_update(run['id'],run['steps'],'failed')
+                            return self.send_json({'workflow':run,'error':step['error']},502)
+                        step['status']='completed';step['result']=result.get('text','')
+                        accumulated+='\\n\\n'+role['name']+' findings:\\n'+step['result'][:9000]
+                        run=advanced.workflow_update(run['id'],run['steps'],'awaiting_approval')
+                    return self.send_json({'workflow':run,'approval_required':True,'message':'Research completed. Review evidence and explicitly approve architecture before the next stage.'})
+                if action=='approve':
+                    wid=data.get('id')
+                    run=advanced.workflow_get(wid)
+                    if not run:return self.send_json({'error':'Workflow not found'},404)
+                    if run['status']!='awaiting_approval':return self.send_json({'error':'Workflow is not awaiting approval.'},409)
+                    if not agents.workflow_approval_valid(data.get('approved')):return self.send_json({'error':'Explicit approval boolean is required.'},403)
+                    step=next(x for x in run['steps'] if x['id']=='product-architect')
+                    step['status']='running'
+                    run=advanced.workflow_update(wid,run['steps'],'running',approved=True)
+                    context='\\n\\n'.join(x['title']+':\\n'+str(x.get('result') or '') for x in run['steps'] if x.get('result'))
+                    role=agents.get_agent('product-architect')
+                    result=self.call_llm_data(role['system'],'Create a practical MVP architecture based on the approved opportunity. Include acceptance criteria, scope, data model, local-first architecture, risks and validation plan.\\n\\nBRIEF:\\n'+run['input_text']+'\\n\\nRESEARCH:\\n'+context,False)
+                    if not result or not result.get('ok'):
+                        step['status']='failed';step['error']=(result or {}).get('error','Local model failed')
+                        run=advanced.workflow_update(wid,run['steps'],'failed',approved=True)
+                        return self.send_json({'workflow':run,'error':step['error']},502)
+                    step['status']='completed';step['result']=result.get('text','')
+                    run=advanced.workflow_update(wid,run['steps'],'completed',approved=True)
+                    return self.send_json({'workflow':run,'approved':True,'message':'Architecture stage completed. Build execution is not automatic.'})
+                if action=='reject':
+                    wid=data.get('id');run=advanced.workflow_get(wid)
+                    if not run:return self.send_json({'error':'Workflow not found'},404)
+                    if run['status']!='awaiting_approval':return self.send_json({'error':'Workflow is not awaiting approval.'},409)
+                    run=advanced.workflow_update(wid,run['steps'],'rejected',approved=False)
+                    return self.send_json({'workflow':run,'message':'Workflow rejected and saved locally.'})
+                return self.send_json({'error':'Unknown workflow action.'},400)
             if self.path=='/api/agents/run':
                 agent_id=str(data.get('agent_id',''))[:80]
                 task=str(data.get('task','')).strip()[:12000]
