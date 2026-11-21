@@ -435,7 +435,7 @@ class Handler(SimpleHTTPRequestHandler):
                 role=agents.get_agent(agent_id)
                 if not role: return self.send_json({'error':'Unknown agent role'},400)
                 if not task: return self.send_json({'error':'Task is required'},400)
-                result=self.call_llm_data(role['system'],'TASK:\\n'+task+'\\n\\nCONTEXT:\\n'+context)
+                result=self.call_llm_data(role['system'],'TASK:\n'+task+'\n\nCONTEXT:\n'+context)
                 return self.send_json({'agent':role['name'],'ok':result.get('ok',False),'result':result.get('text'),'error':result.get('error'),'hint':result.get('hint')},200 if result.get('ok') else 502)
             if self.path=='/api/opportunities': return self.send_json(advanced.opportunity_save(data))
             if self.path.startswith('/api/opportunities/delete/'): return self.send_json(advanced.opportunity_delete(self.path.rsplit('/',1)[-1]))
