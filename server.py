@@ -111,10 +111,30 @@ def normalize_model_files(obj):
     return {}
 
 
+def inject_appforge_intro(files):
+    html = files.get('index.html', '')
+    if 'appforge-intro.css' not in html:
+        tag = '<link rel="stylesheet" href="./appforge-intro.css">'
+        html = re.sub(r'</head>', tag + '\\n</head>', html, count=1, flags=re.I) if re.search(r'</head>', html, re.I) else tag + '\\n' + html
+    if 'appforge-intro.js' not in html:
+        tag = '<script src="./appforge-intro.js" defer></script>'
+        html = re.sub(r'</body>', tag + '\\n</body>', html, count=1, flags=re.I) if re.search(r'</body>', html, re.I) else html + '\\n' + tag
+    files['index.html'] = html
+    files['appforge-intro.css'] = "#appforge-intro{position:fixed;inset:0;z-index:99999;display:grid;place-items:center;background:#07090d;color:white;transition:opacity .5s,visibility .5s}.af-hidden{opacity:0;visibility:hidden;pointer-events:none}.af-glow{position:absolute;inset:auto -20% -30%;height:65%;border-radius:50%;background:radial-gradient(ellipse,rgba(40,120,255,.5),transparent 65%);animation:afpulse 2.5s ease-in-out infinite alternate}.af-content{position:relative;text-align:center;padding:24px;animation:afenter .8s ease-out}.af-logo{font:900 clamp(2.5rem,13vw,6rem)/1 system-ui;letter-spacing:.1em}.af-line{height:2px;width:min(70vw,320px);margin:22px auto;background:linear-gradient(90deg,transparent,#48aaff,#fff,#ff304d,transparent);animation:afline 1.5s infinite}.af-tag{font:500 11px system-ui;letter-spacing:.3em;color:#aab6ca}.af-skip{position:absolute;top:16px;right:16px;padding:9px 15px;border:1px solid #ffffff55;border-radius:99px;background:#111a;color:white;z-index:2}.af-video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}.af-video[hidden]{display:none}@keyframes afpulse{from{opacity:.5;transform:scale(.9)}to{opacity:1;transform:scale(1.08)}}@keyframes afenter{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:none}}@keyframes afline{0%,100%{transform:scaleX(.3);opacity:.4}50%{transform:scaleX(1);opacity:1}}@media(prefers-reduced-motion:reduce){#appforge-intro *{animation:none!important;transition:none!important}}"
+    files['appforge-intro.js'] = "(()=>{function start(){if(document.getElementById('appforge-intro'))return;const r=document.createElement('div');r.id='appforge-intro';r.innerHTML='<button class=\"af-skip\">Skip intro</button><video class=\"af-video\" muted autoplay playsinline hidden></video><div class=\"af-glow\"></div><div class=\"af-content\"><div class=\"af-logo\">WELCOME</div><div class=\"af-line\"></div><div class=\"af-tag\">MADE FOR WHAT\\'S NEXT</div></div>';document.body.appendChild(r);let done=false;const close=()=>{if(done)return;done=true;r.classList.add('af-hidden');setTimeout(()=>r.remove(),550)};r.querySelector('.af-skip').onclick=close;const v=r.querySelector('video');v.src='./intro.mp4';v.onloadeddata=()=>{v.hidden=false;v.play().catch(()=>{v.hidden=true;setTimeout(close,3000)});setTimeout(close,Math.min(Math.max((v.duration||4)*1000,2500),8000)};v.onerror=()=>setTimeout(close,3000);v.onended=close;setTimeout(()=>{if(!v.readyState&&!done)setTimeout(close,3000)},1200)}if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start,{once:true});else start()})();"
+    sw = files.get('sw.js', '')
+    if 'appforge-intro.js' not in sw:
+        m = re.search(r"caches\\.open\\(['\\\"]([^'\\\"]+)['\\\"]\\)", sw)
+        cname = m.group(1) if m else 'appforge-intro-v1'
+        sw += '\\nself.addEventListener(\'install\',e=>e.waitUntil(caches.open('+json.dumps(cname)+').then(c=>c.addAll([\'./appforge-intro.css\',\'./appforge-intro.js\']))));\\n'
+        files['sw.js'] = sw
+    files['README.md'] = files.get('README.md', '') + '\\n\\n## Intro trailer\\nAdd a local `intro.mp4` for a short muted opening trailer. If absent, AppForge displays an animated fallback. Intro is skippable.\\n'
+    return files
+
 def generate_split_source_files(call_model, slug, brief):
     """Generate required source files separately when the model cannot return JSON."""
     prompts = {
-        "index.html": "Return only complete semantic mobile-first HTML5. Include viewport, accessible labels, and local references to styles.css and app.js.",
+        "index.html": "Return only complete semantic mobile-first HTML5. Include viewport, accessible labels, and local references to styles.css and app.js. AppForge injects an intro trailer overlay automatically.",
         "app.js": "Return only complete functional vanilla JavaScript. No imports, CDN, external services, or placeholder handlers.",
         "styles.css": "Return only complete responsive mobile-first CSS with visible focus states and readable contrast."
     }
@@ -481,7 +501,7 @@ class Handler(SimpleHTTPRequestHandler):
             if project is None:
                 return self.send_json({'ok':False,'error':'Could not allocate a safe project directory.'},409)
             project.mkdir(parents=True,exist_ok=False)
-            system='You are a senior software engineer. Produce a production-oriented, ORIGINAL Android/PWA app implementation. Do not copy any named competitor source or assets. Output a JSON object with keys: app_name, description, files (object mapping relative filenames to complete text content), build_notes, tests. Prefer a self-contained PWA (index.html, app.js, styles.css, manifest.webmanifest, sw.js) and include Android packaging instructions for Capacitor when relevant. Do not use markdown fences. Avoid secrets. Keep paths simple and safe.'
+            system='You are a senior software engineer. Produce a production-oriented, ORIGINAL Android/PWA app implementation. Do not copy any named competitor source or assets. Output a JSON object with keys: app_name, description, files (object mapping relative filenames to complete text content), build_notes, tests. Prefer a self-contained PWA (index.html, app.js, styles.css, manifest.webmanifest, sw.js). AppForge injects a skippable intro trailer using local intro.mp4 when supplied, with animated fallback and include Android packaging instructions for Capacitor when relevant. Do not use markdown fences. Avoid secrets. Keep paths simple and safe.'
             result=self.call_llm(system,brief,raw=True)
             if not result.get('ok'):
                 project.rmdir(); return self.send_json(result,502)
@@ -496,7 +516,7 @@ class Handler(SimpleHTTPRequestHandler):
                     except OSError: pass
                     return self.send_json({'ok':False,'error':'The model did not return a usable file map and split generation failed.','detail':split_error,'project':name},502)
                 obj.setdefault('build_notes','Source files generated in separate local model calls because structured JSON was unavailable.')
-            files, file_error = validate_generated_files(model_files)
+            model_files = inject_appforge_intro(model_files)\n            files, file_error = validate_generated_files(model_files)
             if file_error:
                 for child in project.iterdir():
                     if child.is_file() or child.is_symlink(): child.unlink()
