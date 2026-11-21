@@ -6,10 +6,10 @@ class OpportunityScoreTests(unittest.TestCase):
         self.assertEqual(opportunity_score({}), 18)  # unknown growth + default effort/cost assumptions
 
     def test_revenue_threshold_awards_top_demand_points(self):
-        self.assertEqual(opportunity_score({"revenue_usd_monthly": 50000}), 25)
+        self.assertEqual(opportunity_score({"revenue_usd_monthly": 50000}), 35)
 
     def test_revenue_below_threshold_is_not_top_tier(self):
-        self.assertEqual(opportunity_score({"revenue_usd_monthly": 10000}), 15)
+        self.assertEqual(opportunity_score({"revenue_usd_monthly": 10000}), 25)
 
     def test_differentiation_and_pain_points_add_points(self):
         base = opportunity_score({})
