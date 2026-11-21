@@ -292,6 +292,7 @@ def db():
     c.execute('''CREATE TABLE IF NOT EXISTS apps (id INTEGER PRIMARY KEY, app_id TEXT, name TEXT, developer TEXT, category TEXT, store_url TEXT, icon TEXT, source TEXT, region TEXT, rank INTEGER, collected_at INTEGER, raw_json TEXT)''')
     c.execute('''CREATE INDEX IF NOT EXISTS idx_apps_history ON apps(app_id, collected_at)''')
     c.execute('''CREATE TABLE IF NOT EXISTS reviews (id INTEGER PRIMARY KEY, app_id TEXT, review_id TEXT, title TEXT, body TEXT, rating INTEGER, author TEXT, source_url TEXT, collected_at INTEGER, UNIQUE(app_id, review_id))''')
+    c.execute('''CREATE TABLE IF NOT EXISTS opportunities (id INTEGER PRIMARY KEY, app_name TEXT NOT NULL, source_url TEXT, source_name TEXT, category TEXT, revenue_usd_monthly REAL, launch_date TEXT, growth_signal TEXT, pain_points TEXT, differentiator TEXT, build_difficulty INTEGER, operating_cost INTEGER, notes TEXT, created_at INTEGER)''')
     c.execute('''CREATE TABLE IF NOT EXISTS events (id INTEGER PRIMARY KEY, project TEXT, event TEXT, value REAL, metadata TEXT, created_at INTEGER)''')
     c.execute('''CREATE TABLE IF NOT EXISTS launch_config (project TEXT PRIMARY KEY, config TEXT, updated_at INTEGER)''')
     c.commit(); return c
@@ -373,6 +374,79 @@ def reviews(app_id, country='us', limit=25):
         out.append({'title':title,'body':body,'rating':rating,'author':author,'source_url':url,'collected_at':now})
     c.commit(); c.close()
     return {'app_id':str(app_id),'source_url':url,'collected_at':now,'reviews':out,'note':'Public RSS availability varies; no reviews does not mean no complaints.'}
+
+def opportunity_is_recent(record):
+    launch=str(record.get('launch_date') or '')
+    try:
+        from datetime import date
+        d=date.fromisoformat(launch)
+        months=(date.today().year-d.year)*12+date.today().month-d.month
+        return 0 <= months <= 12
+    except (ValueError,TypeError):
+        return False
+
+def opportunity_score(record):
+    """Deterministic 100-point score; estimated revenue is user-entered evidence, never inferred."""
+    revenue = record.get("revenue_usd_monthly")
+    try: revenue = float(revenue) if revenue not in (None, "") else None
+    except (TypeError, ValueError): revenue = None
+    recent = opportunity_is_recent(record)
+    growth = str(record.get("growth_signal") or "").lower()
+    difficulty = max(1,min(5,int(record.get("build_difficulty") or 3)))
+    operating = max(1,min(5,int(record.get("operating_cost") or 3)))
+    score = 0
+    score += 25 if revenue is not None and revenue >= 50000 else (15 if revenue is not None and revenue >= 10000 else 5 if revenue is not None and revenue > 0 else 0)
+    score += 15 if recent else 0
+    score += 15 if growth in ("strong","positive","growing") else 8 if growth in ("unknown","mixed") else 0
+    score += 15 if str(record.get("pain_points") or "").strip() else 0
+    score += 15 if str(record.get("differentiator") or "").strip() else 0
+    score += 10 if difficulty <= 2 else 7 if difficulty == 3 else 3
+    score += 5 if operating <= 2 else 3 if operating == 3 else 0
+    return min(100,score)
+
+def opportunity_list(filters=None):
+    filters=filters or {}
+    c=db()
+    rows=[dict(r) for r in c.execute("SELECT * FROM opportunities ORDER BY created_at DESC")]
+    c.close()
+    for r in rows:
+        r["score"]=opportunity_score(r)
+    if filters.get("min_revenue"):
+        rows=[r for r in rows if (r.get("revenue_usd_monthly") or 0)>=float(filters["min_revenue"])]
+    if filters.get("recent_only"):
+        rows=[r for r in rows if opportunity_is_recent(r)]
+    if filters.get("category"):
+        q=str(filters["category"]).lower()
+        rows=[r for r in rows if q in str(r.get("category") or "").lower()]
+    rows.sort(key=lambda r:(r["score"],r["created_at"]),reverse=True)
+    return {"opportunities":rows,"count":len(rows),"score_note":"Scores are heuristic prioritization, not proof of market viability. Revenue/download estimates are user-supplied and must be independently verified."}
+
+def opportunity_save(data):
+    name=str(data.get("app_name") or "").strip()
+    if not name or len(name)>160: raise ValueError("App name is required (maximum 160 characters).")
+    url=str(data.get("source_url") or "").strip()
+    if url and (len(url)>1000 or not url.startswith(("https://","http://"))): raise ValueError("Source URL must be an HTTP(S) URL.")
+    launch=str(data.get("launch_date") or "").strip()
+    if launch and not re.fullmatch(r"\d{4}-\d{2}-\d{2}",launch): raise ValueError("Launch date must use YYYY-MM-DD.")
+    revenue=data.get("revenue_usd_monthly")
+    if revenue not in (None,""):
+        try: revenue=float(revenue)
+        except (TypeError,ValueError): raise ValueError("Monthly revenue must be numeric.")
+        if revenue<0 or revenue>1e12: raise ValueError("Revenue value is out of range.")
+    fields={k:str(data.get(k) or "")[:4000] for k in ("category","growth_signal","pain_points","differentiator","notes","source_name")}
+    difficulty=max(1,min(5,int(data.get("build_difficulty") or 3)))
+    operating=max(1,min(5,int(data.get("operating_cost") or 3)))
+    c=db()
+    c.execute("""INSERT INTO opportunities(app_name,source_url,source_name,category,revenue_usd_monthly,launch_date,growth_signal,pain_points,differentiator,build_difficulty,operating_cost,notes,created_at)
+    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)""",(name,url,fields["source_name"],fields["category"],revenue,launch,fields["growth_signal"],fields["pain_points"],fields["differentiator"],difficulty,operating,fields["notes"],int(time.time())))
+    oid=c.execute("SELECT last_insert_rowid()").fetchone()[0]; c.commit(); c.close()
+    return {"ok":True,"id":oid,"score":opportunity_score({"revenue_usd_monthly":revenue,"launch_date":launch,"growth_signal":fields["growth_signal"],"pain_points":fields["pain_points"],"differentiator":fields["differentiator"],"build_difficulty":difficulty,"operating_cost":operating})}
+
+def opportunity_delete(oid):
+    c=db(); cur=c.execute("DELETE FROM opportunities WHERE id=?",(int(oid),)); c.commit(); c.close()
+    return {"ok":cur.rowcount>0,"deleted":cur.rowcount>0}
+
+
 
 def repo_catalog():
     # Aider selected as optional adapter: never auto-install into host Python.

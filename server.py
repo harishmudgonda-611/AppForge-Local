@@ -4,7 +4,7 @@ from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
 from pathlib import Path
 import json, os, urllib.request, urllib.error, re, subprocess, threading, time, ipaddress, shutil, tempfile
-import advanced
+import advanced, agents
 
 ROOT = Path(__file__).resolve().parent
 STATIC = ROOT / 'static'
@@ -308,6 +308,8 @@ class Handler(SimpleHTTPRequestHandler):
         if p.path.startswith('/api/'):
             try:
                 q=parse_qs(p.query)
+                if p.path=='/api/agents': return self.send_json(agents.list_agents())
+                if p.path=='/api/opportunities': return self.send_json(advanced.opportunity_list({'min_revenue':q.get('min_revenue',[''])[0],'recent_only':q.get('recent_only',[''])[0]=='1','category':q.get('category',[''])[0]}))
                 if p.path=='/api/research/search': return self.send_json(advanced.research_search(q.get('term',[''])[0],q.get('region',['in'])[0],q.get('limit',['25'])[0]))
                 if p.path=='/api/research/history': return self.send_json(advanced.history(q.get('app_id',[''])[0],q.get('limit',['30'])[0]))
                 if p.path=='/api/research/reviews':
@@ -426,6 +428,17 @@ class Handler(SimpleHTTPRequestHandler):
         try: data=self.body()
         except Exception as e: return self.send_json({'error':str(e)},400)
         try:
+            if self.path=='/api/agents/run':
+                agent_id=str(data.get('agent_id',''))[:80]
+                task=str(data.get('task','')).strip()[:12000]
+                context=str(data.get('context',''))[:12000]
+                role=agents.get_agent(agent_id)
+                if not role: return self.send_json({'error':'Unknown agent role'},400)
+                if not task: return self.send_json({'error':'Task is required'},400)
+                result=self.call_llm_data(role['system'],'TASK:\n'+task+'\n\nCONTEXT:\n'+context)
+                return self.send_json({'agent':role['name'],'ok':result.get('ok',False),'result':result.get('text'),'error':result.get('error'),'hint':result.get('hint')},200 if result.get('ok') else 502)
+            if self.path=='/api/opportunities': return self.send_json(advanced.opportunity_save(data))
+            if self.path.startswith('/api/opportunities/delete/'): return self.send_json(advanced.opportunity_delete(self.path.rsplit('/',1)[-1]))
             if self.path=='/api/replica/run':
                 result=advanced.replica_run(data,self.call_llm_data)
                 return self.send_json(result['body'],result.get('status',200))
