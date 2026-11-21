@@ -67,7 +67,11 @@ class OpportunityRadarTests(unittest.TestCase):
         self.assertTrue(opportunity_radar.delete_opportunity(created["opportunity"]["id"])["ok"])
         self.assertEqual(opportunity_radar.list_opportunities()["opportunities"], [])
 
-    def test_source_url_rejects_non_http_scheme(self):\n        with self.assertRaises(ValueError):\n            opportunity_radar.save_opportunity(self.sample(source_url='javascript:alert(1)'))\n\n    def test_delete_unknown_id_fails(self):
+    def test_source_url_rejects_non_http_scheme(self):
+        with self.assertRaises(ValueError):
+            opportunity_radar.save_opportunity(self.sample(source_url='javascript:alert(1)'))
+
+    def test_delete_unknown_id_fails(self):
         with self.assertRaises(ValueError):
             opportunity_radar.delete_opportunity(9999)
 
