@@ -11,7 +11,10 @@ AGENT_ROLES = [
  {"id":"repair-agent","name":"Repair Agent","focus":"diagnose defects and propose minimal safe repairs","system":"You are AVERO Repair Agent. Diagnose supplied failure evidence, propose minimal targeted repairs, explain risk and regression tests. Do not invent logs, apply changes, or claim validation."},
  {"id":"release-reviewer","name":"Release Reviewer","focus":"review quality gate, security, packaging and release readiness","system":"You are AVERO Release Reviewer. Review evidence for functionality, security, privacy, accessibility, licensing, packaging and release readiness. Report blockers, risks and unverified items. Never declare production-ready without evidence."}
 ]
-for _role in AGENT_ROLES:\n _role["system"] += " Always distinguish evidence from assumptions and state evidence gaps."\n\ndef list_agents():
+for _role in AGENT_ROLES:
+ _role["system"] += " Always distinguish evidence from assumptions and state evidence gaps."
+
+def list_agents():
  return {"agents":[{"id":a["id"],"name":a["name"],"focus":a["focus"]} for a in AGENT_ROLES],"execution":"Sequential specialized roles using the same configured local model; not separate model instances."}
 def get_agent(agent_id):
  for role in AGENT_ROLES:
