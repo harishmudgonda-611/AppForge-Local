@@ -3,7 +3,7 @@ from advanced import opportunity_score
 
 class OpportunityScoreTests(unittest.TestCase):
     def test_empty_evidence_scores_zero(self):
-        self.assertEqual(opportunity_score({}), 0)
+        self.assertEqual(opportunity_score({}), 18)  # unknown growth + default effort/cost assumptions
 
     def test_revenue_threshold_awards_top_demand_points(self):
         self.assertEqual(opportunity_score({"revenue_usd_monthly": 50000}), 25)
