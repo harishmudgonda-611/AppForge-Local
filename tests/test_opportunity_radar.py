@@ -1,9 +1,19 @@
 import unittest
-from advanced import opportunity_score
+from advanced import opportunity_score, opportunity_is_recent
 
 class OpportunityScoreTests(unittest.TestCase):
     def test_empty_evidence_scores_zero(self):
         self.assertEqual(opportunity_score({}), 10)  # default build difficulty and operating cost points
+
+    def test_recent_launch_filter_accepts_recent_date(self):
+        from datetime import date
+        today=date.today()
+        recent=today.replace(year=today.year-1) if today.month==12 else today.replace(year=today.year-1,month=today.month+1)
+        self.assertTrue(opportunity_is_recent({'launch_date':recent.isoformat()}))
+
+    def test_recent_launch_filter_rejects_old_or_invalid_date(self):
+        self.assertFalse(opportunity_is_recent({'launch_date':'2000-01-01'}))
+        self.assertFalse(opportunity_is_recent({'launch_date':'not-a-date'}))
 
     def test_revenue_threshold_awards_top_demand_points(self):
         self.assertEqual(opportunity_score({"revenue_usd_monthly": 50000}), 35)
