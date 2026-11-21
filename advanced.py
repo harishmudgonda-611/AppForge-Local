@@ -424,7 +424,7 @@ def opportunity_save(data):
     url=str(data.get("source_url") or "").strip()
     if url and (len(url)>1000 or not url.startswith(("https://","http://"))): raise ValueError("Source URL must be an HTTP(S) URL.")
     launch=str(data.get("launch_date") or "").strip()
-    if launch and not re.fullmatch(r"\\d{4}-\\d{2}-\\d{2}",launch): raise ValueError("Launch date must use YYYY-MM-DD.")
+    if launch and not re.fullmatch(r"\d{4}-\d{2}-\d{2}",launch): raise ValueError("Launch date must use YYYY-MM-DD.")
     revenue=data.get("revenue_usd_monthly")
     if revenue not in (None,""):
         try: revenue=float(revenue)
