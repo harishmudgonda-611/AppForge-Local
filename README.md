@@ -8,7 +8,7 @@
 
 - Local web interface and Python API, bound to `127.0.0.1` by default.
 - Optional AI analysis and original source generation through a local OpenAI-compatible model endpoint.
-- Public Apple App Store search and top-free chart snapshots, with source URLs and collection timestamps. These are not download or revenue metrics.
+- Public Apple App Store search and top-free chart snapshots, with source URLs and collection timestamps. These are not download or revenue metrics.\n- Free-source Opportunity Radar: research links, a locally stored shortlist, evidence notes, and transparent 100-point opportunity scoring.
 - Local SQLite research history, review-feed collection where available, and manually recorded local analytics.
 - Static project checks (no package scripts execute by default), owner-approved repair workflows, and Git checkpoints.
 - An 11-stage Replica-inspired workflow adapter for research, architecture, design, build, test planning and release preflight.
@@ -16,7 +16,7 @@
 
 Google Play links are provided for manual research; this project does not claim to scrape or verify Google Play rankings. It aims to build original implementations and does not decompile or copy competitor source code, branding or protected assets.
 
-## Requirements
+## Opportunity Radar\n\nOpen **Opportunity radar** in the sidebar to use free discovery sources (Product Hunt, BetaList, Indie Hackers, Reddit, Google Play, GitHub Trending, Google Trends, and more). Search links open external sites; AppForge does not scrape them or bypass paywalls. Save your own evidence and score ideas across demand (25), revenue evidence (20), competition gap (20), build ease (15), monetization (10), and fit (10). Saved ideas are stored in a local SQLite database under `state/opportunities.db`. Revenue/download estimates are unverified unless you attach credible evidence; the score is a decision aid, not market truth.\n\n## Requirements
 
 - Python 3.10 or newer. The server uses the Python standard library; no third-party Python packages are required.
 - Optional local model server exposing an OpenAI-compatible `/v1/chat/completions` API (for example llama.cpp or Ollama).
