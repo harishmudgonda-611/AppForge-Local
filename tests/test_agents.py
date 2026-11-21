@@ -1,8 +1,27 @@
 import unittest
 import agents
+import advanced
+import tempfile
+from pathlib import Path
 
 
 class AgentRegistryTests(unittest.TestCase):
+    def test_workflow_run_persists_and_updates(self):
+        original_db=advanced.DB
+        with tempfile.TemporaryDirectory() as temp:
+            advanced.DB=Path(temp)/"test.sqlite3"
+            try:
+                steps=[{"id":"market-scout","status":"pending"}]
+                run=advanced.workflow_create("Test","Research brief",steps)
+                self.assertEqual(run["status"],"running")
+                self.assertEqual(run["input_text"],"Research brief")
+                steps[0]["status"]="completed"
+                updated=advanced.workflow_update(run["id"],steps,"awaiting_approval")
+                self.assertEqual(updated["steps"][0]["status"],"completed")
+                self.assertEqual(advanced.workflow_list()["workflows"][0]["id"],run["id"])
+            finally:
+                advanced.DB=original_db
+
     def test_agent_registry_has_unique_ids_and_required_roles(self):
         catalog=agents.list_agents()["agents"]
         ids=[a["id"] for a in catalog]
