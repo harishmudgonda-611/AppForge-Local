@@ -71,8 +71,10 @@ def save_opportunity(data):
     status=data.get("status","research")
     if status not in ("research","validate","build","rejected","launched"): status="research"
     source_url=_clean_text(data.get("source_url"),1000)
-    if source_url and urlparse(source_url).scheme not in ("http","https"):
-        raise ValueError("Source URL must use http or https.")
+    if source_url:
+        parsed_source=urlparse(source_url)
+        if parsed_source.scheme not in ("http","https") or not parsed_source.hostname or parsed_source.username or parsed_source.password:
+            raise ValueError("Source URL must be a valid http or https URL without embedded credentials.")
     now=int(time.time())
     values=(title,_clean_text(data.get("problem"),2000),_clean_text(data.get("audience"),500),
       _clean_text(data.get("source_name"),120),source_url,
