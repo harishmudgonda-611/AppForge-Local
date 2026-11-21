@@ -81,3 +81,23 @@ const oldGotoRadar=goto;goto=function(page){oldGotoRadar(page);if(page==='opport
 async function loadAgentCatalog(){try{const d=await api('/api/agents');const sel=$('#agent-role'),grid=$('#agent-catalog');sel.innerHTML=d.agents.map(a=>'<option value="'+esc(a.id)+'">'+esc(a.name)+' — '+esc(a.focus)+'</option>').join('');grid.innerHTML=d.agents.map(a=>'<article class="panel"><h3>'+esc(a.name)+'</h3><p>'+esc(a.focus)+'</p></article>').join('')}catch(e){$('#agent-catalog').textContent=e.message}}
 $('#agent-run')?.addEventListener('click',async()=>{const out=$('#agent-result'),state=$('#agent-state');out.classList.remove('empty');out.textContent='Agent is working with the configured local model…';state.textContent='Running';$('#agent-run').disabled=true;try{const d=await api('/api/agents/run',{agent_id:$('#agent-role').value,task:$('#agent-task').value,context:$('#agent-context').value});out.textContent=d.result||d.error||'No output';state.textContent=d.ok?'Completed':'Failed';}catch(e){out.textContent=e.message;state.textContent='Failed'}finally{$('#agent-run').disabled=false}});
 const priorGoto=goto;goto=function(page){priorGoto(page);if(page==='agents'&&!$('#agent-role').children.length)loadAgentCatalog()};
+
+async function renderWorkflow(w){
+ const out=$('#workflow-output'),status=$('#workflow-status');
+ if(!w){out.textContent='No workflow loaded.';return}
+ out.classList.remove('empty');
+ status.textContent='Workflow #'+w.id+' · '+w.status+' · '+(w.approved?'Architecture approved':'Approval pending');
+ out.innerHTML='<h3>'+esc(w.name)+'</h3><p><b>Brief:</b> '+esc(w.input_text)+'</p>'+w.steps.map(s=>'<article class="panel" style="margin:8px 0"><h4>'+esc(s.title)+' · '+esc(s.status)+'</h4>'+(s.result?'<pre class="prose">'+esc(s.result)+'</pre>':'')+(s.error?'<p class="error">'+esc(s.error)+'</p>':'')+'</article>').join('')+(w.status==='awaiting_approval'?'<div class="controls"><button class="primary" id="workflow-approve">Approve architecture stage</button><button class="secondary" id="workflow-reject">Reject workflow</button></div>':'');
+ $('#workflow-approve')?.addEventListener('click',async()=>{if(!confirm('Approve this research and run the Product Architect agent? This does not generate app code.'))return;status.textContent='Running approved architecture stage…';try{const d=await api('/api/agents/workflow',{action:'approve',id:w.id,approved:true});await renderWorkflow(d.workflow);toast('Architecture completed. Build is still manual/approval-gated.')}catch(e){status.textContent='Approval failed';toast(e.message)}});
+ $('#workflow-reject')?.addEventListener('click',async()=>{if(!confirm('Reject and mark this workflow as rejected?'))return;try{const d=await api('/api/agents/workflow',{action:'reject',id:w.id});await renderWorkflow(d.workflow)}catch(e){toast(e.message)}});
+}
+$('#workflow-start')?.addEventListener('click',async()=>{
+ const task=$('#workflow-task').value.trim();if(!task){toast('Enter the opportunity brief first.');return}
+ if(!confirm('Start four sequential research agents using the configured local model?'))return;
+ const btn=$('#workflow-start'),status=$('#workflow-status');btn.disabled=true;status.textContent='Research agents running sequentially. This may take several model calls…';
+ try{const d=await api('/api/agents/workflow',{action:'start',task,name:$('#workflow-name').value});await renderWorkflow(d.workflow);toast(d.approval_required?'Research completed. Review before approving architecture.':'Workflow started.')}
+ catch(e){status.textContent='Workflow failed';toast(e.message)}
+ finally{btn.disabled=false}
+});
+async function loadWorkflowHistory(){try{const d=await api('/api/agents/workflows');if(d.workflows&&d.workflows.length)await renderWorkflow(d.workflows[0])}catch(e){}}
+const agentGotoWorkflow=goto;goto=function(page){agentGotoWorkflow(page);if(page==='agents')loadWorkflowHistory()};
