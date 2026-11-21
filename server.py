@@ -111,10 +111,31 @@ def normalize_model_files(obj):
     return {}
 
 
+def inject_appforge_intro(files):
+    """Inject a branded-by-the-generated-app intro; never display AVERO/AppForge."""
+    html = files.get('index.html', '')
+    if 'avero-intro.css' not in html:
+        tag = '<link rel="stylesheet" href="./avero-intro.css">'
+        html = re.sub(r'</head>', tag + '\n</head>', html, count=1, flags=re.I) if re.search(r'</head>', html, re.I) else tag + '\n' + html
+    if 'avero-intro.js' not in html:
+        tag = '<script src="./avero-intro.js" defer></script>'
+        html = re.sub(r'</body>', tag + '\n</body>', html, count=1, flags=re.I) if re.search(r'</body>', html, re.I) else html + '\n' + tag
+    files['index.html'] = html
+    files['avero-intro.css'] = "#avero-intro{position:fixed;inset:0;z-index:99999;display:grid;place-items:center;background:#07090d;color:white;transition:opacity .45s,visibility .45s}.av-hidden{opacity:0;visibility:hidden;pointer-events:none}.av-glow{position:absolute;inset:auto -20% -30%;height:65%;border-radius:50%;background:radial-gradient(ellipse,rgba(40,120,255,.5),transparent 65%);animation:avpulse 2.5s ease-in-out infinite alternate}.av-content{position:relative;text-align:center;padding:24px;animation:aventer .8s ease-out}.av-logo{font:900 clamp(2rem,10vw,5rem)/1.1 system-ui;letter-spacing:.04em;max-width:90vw;overflow-wrap:anywhere}.av-line{height:2px;width:min(70vw,320px);margin:22px auto;background:linear-gradient(90deg,transparent,#48aaff,#fff,#ff304d,transparent);animation:avline 1.5s infinite}.av-tag{font:500 11px system-ui;letter-spacing:.25em;color:#aab6ca}.av-skip{position:absolute;top:16px;right:16px;padding:9px 15px;border:1px solid #ffffff55;border-radius:99px;background:#111a;color:white;z-index:2}.av-video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}.av-video[hidden]{display:none}@keyframes avpulse{from{opacity:.5;transform:scale(.9)}to{opacity:1;transform:scale(1.08)}}@keyframes aventer{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:none}}@keyframes avline{0%,100%{transform:scaleX(.3);opacity:.4}50%{transform:scaleX(1);opacity:1}}@media(prefers-reduced-motion:reduce){#avero-intro *{animation:none!important;transition:none!important}}"
+    files['avero-intro.js'] = """(()=>{function start(){if(document.getElementById('avero-intro'))return;const root=document.createElement('div');root.id='avero-intro';root.innerHTML='<button class="av-skip" type="button">Skip intro</button><video class="av-video" muted autoplay playsinline hidden></video><div class="av-glow"></div><div class="av-content"><div class="av-logo"></div><div class="av-line"></div><div class="av-tag">CREATE WHAT’S NEXT</div></div>';document.body.appendChild(root);let finished=false;const close=()=>{if(finished)return;finished=true;root.classList.add('av-hidden');setTimeout(()=>root.remove(),500)};root.querySelector('.av-skip').addEventListener('click',close);const logo=root.querySelector('.av-logo');logo.textContent=(document.querySelector('meta[name="application-name"]')?.content||document.title||'Your App').trim();fetch('./manifest.webmanifest',{cache:'no-store'}).then(r=>r.ok?r.json():null).then(m=>{if(m&&m.name)logo.textContent=m.name;if(m&&m.icons&&m.icons.length&&m.icons[0].src){const img=document.createElement('img');img.src=m.icons[0].src;img.alt=m.name||'App logo';img.style.cssText='max-width:min(45vw,180px);max-height:30vh;object-fit:contain;display:block;margin:0 auto 18px';logo.prepend(img)}}).catch(()=>{});const video=root.querySelector('video');video.src='./intro.mp4';video.onloadeddata=()=>{video.hidden=false;video.play().catch(()=>{video.hidden=true;setTimeout(close,3000)});setTimeout(close,Math.min(Math.max((video.duration||4)*1000,2500),8000))};video.onerror=()=>setTimeout(close,3000);video.onended=close;setTimeout(()=>{if(!video.readyState&&!finished)close()},4500)}if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start,{once:true});else start()})();"""
+    sw = files.get('sw.js', '')
+    if 'avero-intro.js' not in sw:
+        m = re.search(r"CACHE='([^']+)'", sw)
+        cname = m.group(1) if m else 'avero-intro-v1'
+        sw += '\nself.addEventListener(\'install\',e=>e.waitUntil(caches.open('+json.dumps(cname)+').then(c=>c.addAll([\'./avero-intro.css\',\'./avero-intro.js\']))));\n'
+        files['sw.js'] = sw
+    files['README.md'] = files.get('README.md', '') + '\n\n## App intro\nAdd a local `intro.mp4` for a short muted opening trailer. If absent, a branded animated fallback uses the generated app name/logo. Intro is skippable.\n'
+    return files
+
 def generate_split_source_files(call_model, slug, brief):
     """Generate required source files separately when the model cannot return JSON."""
     prompts = {
-        "index.html": "Return only complete semantic mobile-first HTML5. Include viewport, accessible labels, and local references to styles.css and app.js.",
+        "index.html": "Return only complete semantic mobile-first HTML5. Include viewport, accessible labels, and local references to styles.css and app.js. AppForge injects an intro trailer overlay automatically.",
         "app.js": "Return only complete functional vanilla JavaScript. No imports, CDN, external services, or placeholder handlers.",
         "styles.css": "Return only complete responsive mobile-first CSS with visible focus states and readable contrast."
     }
@@ -481,7 +502,7 @@ class Handler(SimpleHTTPRequestHandler):
             if project is None:
                 return self.send_json({'ok':False,'error':'Could not allocate a safe project directory.'},409)
             project.mkdir(parents=True,exist_ok=False)
-            system='You are a senior software engineer. Produce a production-oriented, ORIGINAL Android/PWA app implementation. Do not copy any named competitor source or assets. Output a JSON object with keys: app_name, description, files (object mapping relative filenames to complete text content), build_notes, tests. Prefer a self-contained PWA (index.html, app.js, styles.css, manifest.webmanifest, sw.js) and include Android packaging instructions for Capacitor when relevant. Do not use markdown fences. Avoid secrets. Keep paths simple and safe.'
+            system='You are a senior software engineer. Produce a production-oriented, ORIGINAL Android/PWA app implementation. Do not copy any named competitor source or assets. Output a JSON object with keys: app_name, description, files (object mapping relative filenames to complete text content), build_notes, tests. Prefer a self-contained PWA (index.html, app.js, styles.css, manifest.webmanifest, sw.js). AppForge injects a skippable intro trailer using local intro.mp4 when supplied, with animated fallback and include Android packaging instructions for Capacitor when relevant. Do not use markdown fences. Avoid secrets. Keep paths simple and safe.'
             result=self.call_llm(system,brief,raw=True)
             if not result.get('ok'):
                 project.rmdir(); return self.send_json(result,502)
@@ -497,6 +518,14 @@ class Handler(SimpleHTTPRequestHandler):
                     return self.send_json({'ok':False,'error':'The model did not return a usable file map and split generation failed.','detail':split_error,'project':name},502)
                 obj.setdefault('build_notes','Source files generated in separate local model calls because structured JSON was unavailable.')
             files, file_error = validate_generated_files(model_files)
+            if file_error:
+                for child in project.iterdir():
+                    if child.is_file() or child.is_symlink(): child.unlink()
+                    elif child.is_dir(): import shutil; shutil.rmtree(child)
+                project.rmdir()
+                return self.send_json({'ok':False,'error':file_error,'project':name},422)
+            files = inject_appforge_intro(files)
+            files, file_error = validate_generated_files(files)
             if file_error:
                 for child in project.iterdir():
                     if child.is_file() or child.is_symlink(): child.unlink()
