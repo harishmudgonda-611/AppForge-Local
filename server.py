@@ -308,6 +308,7 @@ class Handler(SimpleHTTPRequestHandler):
         if p.path.startswith('/api/'):
             try:
                 q=parse_qs(p.query)
+                if p.path=='/api/opportunities': return self.send_json(advanced.opportunity_list({'min_revenue':q.get('min_revenue',[''])[0],'recent_only':q.get('recent_only',[''])[0]=='1','category':q.get('category',[''])[0]}))
                 if p.path=='/api/research/search': return self.send_json(advanced.research_search(q.get('term',[''])[0],q.get('region',['in'])[0],q.get('limit',['25'])[0]))
                 if p.path=='/api/research/history': return self.send_json(advanced.history(q.get('app_id',[''])[0],q.get('limit',['30'])[0]))
                 if p.path=='/api/research/reviews':
@@ -426,6 +427,8 @@ class Handler(SimpleHTTPRequestHandler):
         try: data=self.body()
         except Exception as e: return self.send_json({'error':str(e)},400)
         try:
+            if self.path=='/api/opportunities': return self.send_json(advanced.opportunity_save(data))
+            if self.path.startswith('/api/opportunities/delete/'): return self.send_json(advanced.opportunity_delete(self.path.rsplit('/',1)[-1]))
             if self.path=='/api/replica/run':
                 result=advanced.replica_run(data,self.call_llm_data)
                 return self.send_json(result['body'],result.get('status',200))
